@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-airtable-dark: #1f2d3d;
+  --color-airtable-mid: #2d4a5e;
+  --color-airtable-teal: #1d7c6a;
+  --color-airtable-blue: #166ee1;
+  --color-airtable-row-hover: #f5f8ff;
+  --color-airtable-border: #e1e3e6;
+  --color-airtable-header-bg: #f5f5f5;
 }
