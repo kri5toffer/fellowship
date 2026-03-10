@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+    output   = "../generated/prisma"
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
+
+enum FieldType {
+    TEXT
+    NUMBER
+    CHECKBOX
+    DATE
+}
+
+model Table {
+    id        String   @id @default(cuid())
+    name      String
+    order     Int      @default(0)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    fields Field[]
+    rows   Row[]
+}
+
+model Field {
+    id        String    @id @default(cuid())
+    name      String
+    type      FieldType @default(TEXT)
+    order     Int       @default(0)
+    tableId   String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+
+    table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)
+    cells Cell[]
+
+    @@unique([tableId, name])
+    @@index([tableId])
+}
+
+model Row {
+    id        String   @id @default(cuid())
+    order     Int      @default(0)
+    tableId   String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)
+    cells Cell[]
+
+    @@index([tableId])
+}
+
+model Cell {
+    id      String  @id @default(cuid())
+    value   String?
+    rowId   String
+    fieldId String
+
+    row   Row   @relation(fields: [rowId], references: [id], onDelete: Cascade)
+    field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+    @@unique([rowId, fieldId])
+    @@index([fieldId])
+    @@index([rowId])
+}
