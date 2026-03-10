@@ -87,8 +87,20 @@ Prisma.NullTypes = {
  * Enums
  */
 exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
   Serializable: 'Serializable'
 });
+
+exports.Prisma.UserScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  name: 'name',
+  avatarUrl: 'avatarUrl',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
 
 exports.Prisma.BaseScalarFieldEnum = {
   id: 'id',
@@ -97,7 +109,8 @@ exports.Prisma.BaseScalarFieldEnum = {
   color: 'color',
   displayOrder: 'displayOrder',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.TableScalarFieldEnum = {
@@ -106,7 +119,8 @@ exports.Prisma.TableScalarFieldEnum = {
   displayOrder: 'displayOrder',
   baseId: 'baseId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.ColumnScalarFieldEnum = {
@@ -116,7 +130,8 @@ exports.Prisma.ColumnScalarFieldEnum = {
   displayOrder: 'displayOrder',
   tableId: 'tableId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.RowScalarFieldEnum = {
@@ -124,19 +139,27 @@ exports.Prisma.RowScalarFieldEnum = {
   displayOrder: 'displayOrder',
   tableId: 'tableId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.CellScalarFieldEnum = {
   id: 'id',
   cellValue: 'cellValue',
   rowId: 'rowId',
-  columnId: 'columnId'
+  columnId: 'columnId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
+};
+
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
 };
 
 exports.Prisma.NullsOrder = {
@@ -151,6 +174,7 @@ exports.FieldType = exports.$Enums.FieldType = {
 };
 
 exports.Prisma.ModelName = {
+  User: 'User',
   Base: 'Base',
   Table: 'Table',
   Column: 'Column',
@@ -195,7 +219,7 @@ const config = {
   "datasourceNames": [
     "db"
   ],
-  "activeProvider": "sqlite",
+  "activeProvider": "postgresql",
   "inlineDatasources": {
     "db": {
       "url": {
@@ -204,13 +228,13 @@ const config = {
       }
     }
   },
-  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../generated/prisma\"\n}\n\ndatasource db {\n  provider = \"sqlite\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum FieldType {\n  TEXT\n  NUMBER\n  CHECKBOX\n  DATE\n}\n\nmodel Base {\n  id           String   @id @default(cuid())\n  baseName     String\n  description  String?\n  color        String   @default(\"#1d7c6a\")\n  displayOrder Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  tables Table[]\n}\n\nmodel Table {\n  id           String   @id @default(cuid())\n  tableName    String\n  displayOrder Int      @default(0)\n  baseId       String\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  base    Base     @relation(fields: [baseId], references: [id], onDelete: Cascade)\n  columns Column[]\n  rows    Row[]\n\n  @@unique([baseId, tableName])\n  @@index([baseId])\n}\n\nmodel Column {\n  id           String    @id @default(cuid())\n  columnName   String\n  fieldType    FieldType @default(TEXT)\n  displayOrder Int       @default(0)\n  tableId      String\n  createdAt    DateTime  @default(now())\n  updatedAt    DateTime  @updatedAt\n\n  table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  cells Cell[]\n\n  @@unique([tableId, columnName])\n  @@index([tableId])\n}\n\nmodel Row {\n  id           String   @id @default(cuid())\n  displayOrder Int      @default(0)\n  tableId      String\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  cells Cell[]\n\n  @@index([tableId])\n}\n\nmodel Cell {\n  id        String  @id @default(cuid())\n  cellValue String?\n  rowId     String\n  columnId  String\n\n  row    Row    @relation(fields: [rowId], references: [id], onDelete: Cascade)\n  column Column @relation(fields: [columnId], references: [id], onDelete: Cascade)\n\n  @@unique([rowId, columnId])\n  @@index([columnId])\n  @@index([rowId])\n}\n",
-  "inlineSchemaHash": "c3992724443049f8b51adbad448c62989a86fe79d9e9707d62f3ad97a233c81b",
+  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nenum FieldType {\n  TEXT\n  NUMBER\n  CHECKBOX\n  DATE\n}\n\n// User model for audit tracking\nmodel User {\n  id        String   @id @default(cuid())\n  email     String   @unique\n  name      String?\n  avatarUrl String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  createdBases   Base[]   @relation(\"BaseCreatedBy\")\n  createdTables  Table[]  @relation(\"TableCreatedBy\")\n  createdColumns Column[] @relation(\"ColumnCreatedBy\")\n  createdRows    Row[]    @relation(\"RowCreatedBy\")\n}\n\nmodel Base {\n  id           String   @id @default(cuid())\n  baseName     String\n  description  String?\n  color        String   @default(\"#1d7c6a\")\n  displayOrder Int      @default(0)\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  createdById String?\n  createdBy   User?   @relation(\"BaseCreatedBy\", fields: [createdById], references: [id], onDelete: SetNull)\n\n  tables Table[]\n\n  @@index([createdById])\n}\n\nmodel Table {\n  id           String   @id @default(cuid())\n  tableName    String\n  displayOrder Int      @default(0)\n  baseId       String\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  // Audit field\n  createdById String?\n  createdBy   User?   @relation(\"TableCreatedBy\", fields: [createdById], references: [id], onDelete: SetNull)\n\n  base    Base     @relation(fields: [baseId], references: [id], onDelete: Cascade)\n  columns Column[]\n  rows    Row[]\n\n  @@unique([baseId, tableName])\n  @@index([baseId])\n  @@index([createdById])\n}\n\nmodel Column {\n  id           String    @id @default(cuid())\n  columnName   String\n  fieldType    FieldType @default(TEXT)\n  displayOrder Int       @default(0)\n  tableId      String\n  createdAt    DateTime  @default(now())\n  updatedAt    DateTime  @updatedAt\n\n  createdById String?\n  createdBy   User?   @relation(\"ColumnCreatedBy\", fields: [createdById], references: [id], onDelete: SetNull)\n\n  table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  cells Cell[]\n\n  @@unique([tableId, columnName])\n  @@index([tableId])\n  @@index([createdById])\n}\n\nmodel Row {\n  id           String   @id @default(cuid())\n  displayOrder Int      @default(0)\n  tableId      String\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  createdById String?\n  createdBy   User?   @relation(\"RowCreatedBy\", fields: [createdById], references: [id], onDelete: SetNull)\n\n  table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  cells Cell[]\n\n  @@index([tableId])\n  @@index([createdById])\n}\n\nmodel Cell {\n  id        String   @id @default(cuid())\n  cellValue String?\n  rowId     String\n  columnId  String\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  row    Row    @relation(fields: [rowId], references: [id], onDelete: Cascade)\n  column Column @relation(fields: [columnId], references: [id], onDelete: Cascade)\n\n  @@unique([rowId, columnId])\n  @@index([columnId])\n  @@index([rowId])\n}\n",
+  "inlineSchemaHash": "b5d252e4c52076f40c9e01f914aed66f256b1f4d7970d1646944656d5fe82354",
   "copyEngine": true
 }
 config.dirname = '/'
 
-config.runtimeDataModel = JSON.parse("{\"models\":{\"Base\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"baseName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"description\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"color\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"tables\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"BaseToTable\"}],\"dbName\":null},\"Table\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"tableName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"baseId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"base\",\"kind\":\"object\",\"type\":\"Base\",\"relationName\":\"BaseToTable\"},{\"name\":\"columns\",\"kind\":\"object\",\"type\":\"Column\",\"relationName\":\"ColumnToTable\"},{\"name\":\"rows\",\"kind\":\"object\",\"type\":\"Row\",\"relationName\":\"RowToTable\"}],\"dbName\":null},\"Column\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"columnName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"fieldType\",\"kind\":\"enum\",\"type\":\"FieldType\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"tableId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"table\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"ColumnToTable\"},{\"name\":\"cells\",\"kind\":\"object\",\"type\":\"Cell\",\"relationName\":\"CellToColumn\"}],\"dbName\":null},\"Row\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"tableId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"table\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"RowToTable\"},{\"name\":\"cells\",\"kind\":\"object\",\"type\":\"Cell\",\"relationName\":\"CellToRow\"}],\"dbName\":null},\"Cell\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"cellValue\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"rowId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"columnId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"row\",\"kind\":\"object\",\"type\":\"Row\",\"relationName\":\"CellToRow\"},{\"name\":\"column\",\"kind\":\"object\",\"type\":\"Column\",\"relationName\":\"CellToColumn\"}],\"dbName\":null}},\"enums\":{},\"types\":{}}")
+config.runtimeDataModel = JSON.parse("{\"models\":{\"User\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"email\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"name\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"avatarUrl\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"createdBases\",\"kind\":\"object\",\"type\":\"Base\",\"relationName\":\"BaseCreatedBy\"},{\"name\":\"createdTables\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"TableCreatedBy\"},{\"name\":\"createdColumns\",\"kind\":\"object\",\"type\":\"Column\",\"relationName\":\"ColumnCreatedBy\"},{\"name\":\"createdRows\",\"kind\":\"object\",\"type\":\"Row\",\"relationName\":\"RowCreatedBy\"}],\"dbName\":null},\"Base\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"baseName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"description\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"color\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"createdById\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdBy\",\"kind\":\"object\",\"type\":\"User\",\"relationName\":\"BaseCreatedBy\"},{\"name\":\"tables\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"BaseToTable\"}],\"dbName\":null},\"Table\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"tableName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"baseId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"createdById\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdBy\",\"kind\":\"object\",\"type\":\"User\",\"relationName\":\"TableCreatedBy\"},{\"name\":\"base\",\"kind\":\"object\",\"type\":\"Base\",\"relationName\":\"BaseToTable\"},{\"name\":\"columns\",\"kind\":\"object\",\"type\":\"Column\",\"relationName\":\"ColumnToTable\"},{\"name\":\"rows\",\"kind\":\"object\",\"type\":\"Row\",\"relationName\":\"RowToTable\"}],\"dbName\":null},\"Column\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"columnName\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"fieldType\",\"kind\":\"enum\",\"type\":\"FieldType\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"tableId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"createdById\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdBy\",\"kind\":\"object\",\"type\":\"User\",\"relationName\":\"ColumnCreatedBy\"},{\"name\":\"table\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"ColumnToTable\"},{\"name\":\"cells\",\"kind\":\"object\",\"type\":\"Cell\",\"relationName\":\"CellToColumn\"}],\"dbName\":null},\"Row\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"displayOrder\",\"kind\":\"scalar\",\"type\":\"Int\"},{\"name\":\"tableId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"createdById\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdBy\",\"kind\":\"object\",\"type\":\"User\",\"relationName\":\"RowCreatedBy\"},{\"name\":\"table\",\"kind\":\"object\",\"type\":\"Table\",\"relationName\":\"RowToTable\"},{\"name\":\"cells\",\"kind\":\"object\",\"type\":\"Cell\",\"relationName\":\"CellToRow\"}],\"dbName\":null},\"Cell\":{\"fields\":[{\"name\":\"id\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"cellValue\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"rowId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"columnId\",\"kind\":\"scalar\",\"type\":\"String\"},{\"name\":\"createdAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"updatedAt\",\"kind\":\"scalar\",\"type\":\"DateTime\"},{\"name\":\"row\",\"kind\":\"object\",\"type\":\"Row\",\"relationName\":\"CellToRow\"},{\"name\":\"column\",\"kind\":\"object\",\"type\":\"Column\",\"relationName\":\"CellToColumn\"}],\"dbName\":null}},\"enums\":{},\"types\":{}}")
 defineDmmfProperty(exports.Prisma, config.runtimeDataModel)
 config.engineWasm = {
   getRuntime: async () => require('./query_engine_bg.js'),

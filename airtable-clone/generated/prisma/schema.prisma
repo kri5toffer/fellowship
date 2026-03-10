@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -16,6 +16,21 @@ enum FieldType {
   NUMBER
   CHECKBOX
   DATE
+}
+
+// User model for audit tracking
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBases   Base[]   @relation("BaseCreatedBy")
+  createdTables  Table[]  @relation("TableCreatedBy")
+  createdColumns Column[] @relation("ColumnCreatedBy")
+  createdRows    Row[]    @relation("RowCreatedBy")
 }
 
 model Base {
@@ -27,7 +42,12 @@ model Base {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  createdById String?
+  createdBy   User?   @relation("BaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
   tables Table[]
+
+  @@index([createdById])
 }
 
 model Table {
@@ -38,12 +58,17 @@ model Table {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Audit field
+  createdById String?
+  createdBy   User?   @relation("TableCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
   base    Base     @relation(fields: [baseId], references: [id], onDelete: Cascade)
   columns Column[]
   rows    Row[]
 
   @@unique([baseId, tableName])
   @@index([baseId])
+  @@index([createdById])
 }
 
 model Column {
@@ -55,11 +80,15 @@ model Column {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  createdById String?
+  createdBy   User?   @relation("ColumnCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
   table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)
   cells Cell[]
 
   @@unique([tableId, columnName])
   @@index([tableId])
+  @@index([createdById])
 }
 
 model Row {
@@ -69,17 +98,23 @@ model Row {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  createdById String?
+  createdBy   User?   @relation("RowCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
   table Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)
   cells Cell[]
 
   @@index([tableId])
+  @@index([createdById])
 }
 
 model Cell {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   cellValue String?
   rowId     String
   columnId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   row    Row    @relation(fields: [rowId], references: [id], onDelete: Cascade)
   column Column @relation(fields: [columnId], references: [id], onDelete: Cascade)

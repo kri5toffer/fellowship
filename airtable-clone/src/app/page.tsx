@@ -1,9 +1,10 @@
-import { api, HydrateClient } from "~/trpc/server";
+import { HydrateClient } from "~/trpc/server";
 import { AppShell } from "./_components/app-shell";
 
-export default async function Home() {
-  void api.base.getAll.prefetch();
+// Disable static prerendering - page needs database at runtime
+export const dynamic = "force-dynamic";
 
+export default function Home() {
   return (
     <HydrateClient>
       <main className="flex min-h-screen flex-col bg-white">

@@ -115,8 +115,20 @@ Prisma.NullTypes = {
  */
 
 exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
   Serializable: 'Serializable'
 });
+
+exports.Prisma.UserScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  name: 'name',
+  avatarUrl: 'avatarUrl',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
 
 exports.Prisma.BaseScalarFieldEnum = {
   id: 'id',
@@ -125,7 +137,8 @@ exports.Prisma.BaseScalarFieldEnum = {
   color: 'color',
   displayOrder: 'displayOrder',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.TableScalarFieldEnum = {
@@ -134,7 +147,8 @@ exports.Prisma.TableScalarFieldEnum = {
   displayOrder: 'displayOrder',
   baseId: 'baseId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.ColumnScalarFieldEnum = {
@@ -144,7 +158,8 @@ exports.Prisma.ColumnScalarFieldEnum = {
   displayOrder: 'displayOrder',
   tableId: 'tableId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.RowScalarFieldEnum = {
@@ -152,19 +167,27 @@ exports.Prisma.RowScalarFieldEnum = {
   displayOrder: 'displayOrder',
   tableId: 'tableId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  createdById: 'createdById'
 };
 
 exports.Prisma.CellScalarFieldEnum = {
   id: 'id',
   cellValue: 'cellValue',
   rowId: 'rowId',
-  columnId: 'columnId'
+  columnId: 'columnId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
+};
+
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
 };
 
 exports.Prisma.NullsOrder = {
@@ -179,6 +202,7 @@ exports.FieldType = exports.$Enums.FieldType = {
 };
 
 exports.Prisma.ModelName = {
+  User: 'User',
   Base: 'Base',
   Table: 'Table',
   Column: 'Column',
