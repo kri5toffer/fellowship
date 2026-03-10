@@ -11,44 +11,22 @@ export function AppShell() {
 
   const baseList = bases ?? [];
   const selectedBaseId = activeBaseId ?? baseList[0]?.id ?? null;
-  const selectedBase = baseList.find((b) => b.id === selectedBaseId);
 
   return (
-    <>
-      {/* Top banner — shows selected base info */}
-      <header
-        className="flex items-center gap-3 px-5 py-2.5"
-        style={{ backgroundColor: selectedBase?.color ?? "#1d7c6a" }}
-      >
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded text-sm font-bold text-white"
-          style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
-        >
-          {selectedBase?.baseName?.charAt(0).toUpperCase() ?? "L"}
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold leading-tight text-white">
-            {selectedBase?.baseName ?? "Lyra"}
-          </h1>
-          {selectedBase?.description && (
-            <p className="text-[11px] leading-tight text-white/60">
-              {selectedBase.description}
-            </p>
-          )}
-        </div>
-      </header>
-
-      {/* Base selector bar */}
+    <div className="flex min-h-screen flex-col">
+      {/* Base selector / workspace bar */}
       <BaseSelector activeBaseId={selectedBaseId} onSelectBase={setActiveBaseId} />
 
-      {/* Main content */}
-      {selectedBaseId ? (
-        <TableTabs baseId={selectedBaseId} />
-      ) : (
-        <div className="flex flex-1 items-center justify-center text-gray-400">
-          Create a base to get started
-        </div>
-      )}
-    </>
+      {/* Main content area */}
+      <div className="flex flex-1 flex-col bg-white">
+        {selectedBaseId ? (
+          <TableTabs baseId={selectedBaseId} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-airtable-text-muted">
+            Create a base to get started
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

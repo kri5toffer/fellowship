@@ -116,4 +116,20 @@ export const tableRouter = createTRPCRouter({
         },
       });
     }),
+
+  deleteRow: publicProcedure
+    .input(z.object({ rowId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.row.delete({
+        where: { id: input.rowId },
+      });
+    }),
+
+  deleteColumn: publicProcedure
+    .input(z.object({ columnId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.column.delete({
+        where: { id: input.columnId },
+      });
+    }),
 });
