@@ -197,7 +197,7 @@ export function BasesPage() {
                         className={`h-8 w-8 rounded-full transition-transform hover:scale-110 ${
                           selectedColor === color ? "ring-2 ring-offset-2" : ""
                         }`}
-                        style={{ backgroundColor: color, ringColor: color }}
+                        style={{ backgroundColor: color }}
                       />
                     ))}
                   </div>
