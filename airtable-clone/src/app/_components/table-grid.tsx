@@ -183,10 +183,17 @@ function CellInput({
 
 type FlatRow = {
   _rowId: string;
-  [columnId: string]: string;
+  _groupValue?: string;
+  _isGroupHeader?: boolean;
+  [columnId: string]: string | boolean | undefined;
 };
 
-export function TableGrid({ tableId }: { tableId: string }) {
+interface TableGridProps {
+  tableId: string;
+  groupByColumnId?: string | null;
+}
+
+export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
   const utils = api.useUtils();
 
   const { data: table, isLoading: isLoadingMeta } = api.table.getById.useQuery(
@@ -251,14 +258,45 @@ export function TableGrid({ tableId }: { tableId: string }) {
   );
 
   const flatData: FlatRow[] = useMemo(() => {
-    return allRows.map((row) => {
+    const rows = allRows.map((row) => {
       const flat: FlatRow = { _rowId: row.id };
       for (const cell of row.cells) {
         flat[cell.columnId] = cell.cellValue ?? "";
       }
       return flat;
     });
-  }, [allRows]);
+
+    if (!groupByColumnId) return rows;
+
+    // Group rows by the selected column
+    const groups = new Map<string, FlatRow[]>();
+    for (const row of rows) {
+      const groupValue = String(row[groupByColumnId] ?? "(empty)");
+      if (!groups.has(groupValue)) {
+        groups.set(groupValue, []);
+      }
+      groups.get(groupValue)!.push(row);
+    }
+
+    // Sort groups alphabetically and flatten with headers
+    const sortedGroups = Array.from(groups.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    );
+
+    const result: FlatRow[] = [];
+    for (const [groupValue, groupRows] of sortedGroups) {
+      // Add group header row
+      result.push({
+        _rowId: `group-header-${groupValue}`,
+        _isGroupHeader: true,
+        _groupValue: groupValue,
+      });
+      // Add all rows in this group
+      result.push(...groupRows.map(row => ({ ...row, _groupValue: groupValue })));
+    }
+
+    return result;
+  }, [allRows, groupByColumnId]);
 
   const navigateCell = useCallback(
     (direction: "up" | "down" | "left" | "right") => {
@@ -533,6 +571,44 @@ export function TableGrid({ tableId }: { tableId: string }) {
             {virtualRows.map((virtualRow) => {
               const row = tableRows[virtualRow.index]!;
               const rowIdx = virtualRow.index;
+              const isGroupHeader = row.original._isGroupHeader;
+
+              // Render group header row
+              if (isGroupHeader) {
+                const groupValue = row.original._groupValue ?? "(empty)";
+                const groupRowCount = flatData.filter(
+                  (r) => !r._isGroupHeader && r._groupValue === groupValue
+                ).length;
+
+                return (
+                  <tr
+                    key={row.id}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    className="bg-purple-50"
+                    style={{ height: `${ROW_HEIGHT}px` }}
+                  >
+                    <td
+                      colSpan={dbColumns.length + 2}
+                      className="border-b border-airtable-border px-3 py-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-purple-600">
+                          <rect x="1" y="2" width="6" height="5" rx="1" />
+                          <rect x="1" y="9" width="6" height="5" rx="1" />
+                          <path d="M9 4.5h5M9 11.5h5" />
+                        </svg>
+                        <span className="text-[13px] font-medium text-purple-700">
+                          {groupValue}
+                        </span>
+                        <span className="text-[12px] text-purple-500">
+                          ({groupRowCount} record{groupRowCount !== 1 ? "s" : ""})
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
 
               return (
                 <tr
@@ -574,7 +650,7 @@ export function TableGrid({ tableId }: { tableId: string }) {
                   {row.getVisibleCells().map((cell, colIdx) => {
                     const col = dbColumns[colIdx];
                     if (!col) return null;
-                    const cellValue = row.original[col.id] ?? "";
+                    const cellValue = String(row.original[col.id] ?? "");
                     return (
                       <td
                         key={cell.id}

@@ -4,19 +4,55 @@ import { useState, useEffect } from "react";
 import { api } from "~/trpc/react";
 import { TableGrid } from "./table-grid";
 
+const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
+  TEXT: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-gray-500">
+      <path d="M2.5 3.5A.5.5 0 0 1 3 3h10a.5.5 0 0 1 0 1H8.5v9a.5.5 0 0 1-1 0V4H3a.5.5 0 0 1-.5-.5z"/>
+    </svg>
+  ),
+  NUMBER: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-orange-500">
+      <path d="M4 3h3v4H4V3zm5 0h3v4H9V3zM4 9h3v4H4V9zm5 0h3v4H9V9z" fillOpacity="0.8"/>
+    </svg>
+  ),
+  CHECKBOX: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-purple-500">
+      <rect x="2" y="2" width="12" height="12" rx="2" />
+      <path d="M4.5 8l2.5 2.5 4.5-4.5" />
+    </svg>
+  ),
+  DATE: (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-cyan-600">
+      <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/>
+    </svg>
+  ),
+};
+
 export function TableTabs({ baseId }: { baseId: string }) {
   const { data: tables, isLoading } = api.table.getAll.useQuery({ baseId });
   const utils = api.useUtils();
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [creatingTable, setCreatingTable] = useState(false);
   const [newTableName, setNewTableName] = useState("");
+  const [groupByColumnId, setGroupByColumnId] = useState<string | null>(null);
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
 
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
 
+  const { data: activeTable } = api.table.getById.useQuery(
+    { id: selectedId ?? "" },
+    { enabled: !!selectedId }
+  );
+
   useEffect(() => {
     setActiveTableId(null);
+    setGroupByColumnId(null);
   }, [baseId]);
+
+  useEffect(() => {
+    setGroupByColumnId(null);
+  }, [selectedId]);
 
   const createTable = api.table.create.useMutation({
     onSuccess: (newTable) => {
@@ -147,6 +183,76 @@ export function TableTabs({ baseId }: { baseId: string }) {
             Sort
           </button>
 
+          {/* Group button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowGroupMenu(!showGroupMenu)}
+              className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] ${
+                groupByColumnId
+                  ? "bg-purple-50 text-purple-700"
+                  : "text-airtable-text-secondary hover:bg-gray-100"
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="1" y="2" width="6" height="5" rx="1" />
+                <rect x="1" y="9" width="6" height="5" rx="1" />
+                <path d="M9 4.5h5M9 11.5h5" />
+              </svg>
+              {groupByColumnId ? (
+                <>
+                  Group: {activeTable?.columns.find((c) => c.id === groupByColumnId)?.columnName}
+                </>
+              ) : (
+                "Group"
+              )}
+            </button>
+
+            {showGroupMenu && (
+              <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                <div className="px-3 py-1.5 text-[11px] font-medium uppercase text-gray-400">
+                  Group by field
+                </div>
+                {activeTable?.columns.map((col) => (
+                  <button
+                    key={col.id}
+                    onClick={() => {
+                      setGroupByColumnId(col.id === groupByColumnId ? null : col.id);
+                      setShowGroupMenu(false);
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-gray-50 ${
+                      col.id === groupByColumnId ? "bg-purple-50 text-purple-700" : "text-airtable-text-primary"
+                    }`}
+                  >
+                    {FIELD_TYPE_ICONS[col.fieldType]}
+                    {col.columnName}
+                    {col.id === groupByColumnId && (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="ml-auto">
+                        <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+                {groupByColumnId && (
+                  <>
+                    <div className="my-1 border-t border-gray-100" />
+                    <button
+                      onClick={() => {
+                        setGroupByColumnId(null);
+                        setShowGroupMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M4 4l8 8M4 12l8-8" />
+                      </svg>
+                      Remove grouping
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex-1" />
 
           <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
@@ -178,7 +284,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
 
       <div className="flex-1 overflow-hidden bg-white">
         {selectedId ? (
-          <TableGrid tableId={selectedId} />
+          <TableGrid tableId={selectedId} groupByColumnId={groupByColumnId} />
         ) : (
           <div className="flex h-64 items-center justify-center text-airtable-text-muted">
             Create a table to get started

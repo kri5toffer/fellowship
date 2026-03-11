@@ -1,14 +1,12 @@
 import { HydrateClient } from "~/trpc/server";
-import { AppShell } from "./_components/app-shell";
+import { BasesPage } from "./_components/bases-page";
 
 export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
     <HydrateClient>
-      <main className="flex min-h-screen flex-col bg-white">
-        <AppShell />
-      </main>
+      <BasesPage />
     </HydrateClient>
   );
 }
