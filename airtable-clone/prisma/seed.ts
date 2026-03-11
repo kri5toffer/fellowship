@@ -6,6 +6,7 @@ async function main() {
   await prisma.cell.deleteMany();
   await prisma.row.deleteMany();
   await prisma.column.deleteMany();
+  await prisma.view.deleteMany();
   await prisma.table.deleteMany();
   await prisma.base.deleteMany();
 

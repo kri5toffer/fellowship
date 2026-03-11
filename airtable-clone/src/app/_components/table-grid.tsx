@@ -191,9 +191,10 @@ type FlatRow = {
 interface TableGridProps {
   tableId: string;
   groupByColumnId?: string | null;
+  filters?: { id: string; columnId: string; operator: string; value: string }[];
 }
 
-export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
+export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridProps) {
   const utils = api.useUtils();
 
   const { data: table, isLoading: isLoadingMeta } = api.table.getById.useQuery(
@@ -207,7 +208,16 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
     isFetchingNextPage,
     isLoading: isLoadingRows,
   } = api.table.getRows.useInfiniteQuery(
-    { tableId, limit: 100 },
+    {
+      tableId,
+      limit: 100,
+      filters: filters.map(({ id, columnId, operator, value }) => ({
+        id,
+        columnId,
+        operator,
+        value,
+      })),
+    },
     { getNextPageParam: (lastPage) => lastPage.nextCursor },
   );
 
@@ -216,8 +226,26 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
     void utils.table.getById.invalidate({ id: tableId });
   }, [utils, tableId]);
 
+  const [pendingEdits, setPendingEdits] = useState<Record<string, string>>({});
+
   const updateCell = api.table.updateCell.useMutation({
-    onSuccess: invalidateAll,
+    onSuccess: (_, variables) => {
+      const key = `${variables.rowId}_${variables.columnId}`;
+      setPendingEdits((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      invalidateAll();
+    },
+    onError: (_, variables) => {
+      const key = `${variables.rowId}_${variables.columnId}`;
+      setPendingEdits((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    },
   });
 
   const addRow = api.table.createRow.useMutation({
@@ -258,7 +286,8 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
   );
 
   const flatData: FlatRow[] = useMemo(() => {
-    const rows = allRows.map((row) => {
+    type RowWithCells = { id: string; cells: { columnId: string; cellValue: string | null }[] };
+    const rows = (allRows as RowWithCells[]).map((row) => {
       const flat: FlatRow = { _rowId: row.id };
       for (const cell of row.cells) {
         flat[cell.columnId] = cell.cellValue ?? "";
@@ -378,13 +407,7 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (
-                        confirm(
-                          `Delete column "${col.columnName}"? This will delete all data in this column.`,
-                        )
-                      ) {
-                        deleteColumn.mutate({ columnId: col.id });
-                      }
+                      deleteColumn.mutate({ columnId: col.id });
                       setColumnMenuId(null);
                     }}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
@@ -466,19 +489,19 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
 
   return (
     <div
-      className="flex flex-col"
+      className="flex min-h-0 flex-1 flex-col"
       onClick={() => setColumnMenuId(null)}
     >
-      <div className="border-b border-airtable-border bg-gray-50/50 px-4 py-1 text-[12px] text-airtable-text-muted">
+      <div className="shrink-0 border-b border-airtable-border bg-gray-50/50 px-4 py-1 text-[12px] text-airtable-text-muted">
         {allRows.length.toLocaleString()} of {totalRowCount.toLocaleString()} rows loaded
         {isFetchingNextPage && " · Loading more..."}
       </div>
 
       <div
         ref={parentRef}
-        className="overflow-auto"
-        style={{ height: "calc(100vh - 140px)" }}
+        className="min-h-0 flex-1 overflow-auto"
       >
+        <div>
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10">
             {reactTable.getHeaderGroups().map((headerGroup) => (
@@ -625,11 +648,9 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
                       </span>
                       <button
                         onClick={() => {
-                          if (confirm("Delete this row?")) {
-                            deleteRow.mutate({
-                              rowId: row.original._rowId,
-                            });
-                          }
+                          deleteRow.mutate({
+                            rowId: row.original._rowId,
+                          });
                         }}
                         className="hidden rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 group-hover:block"
                         title="Delete row"
@@ -650,7 +671,9 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
                   {row.getVisibleCells().map((cell, colIdx) => {
                     const col = dbColumns[colIdx];
                     if (!col) return null;
-                    const cellValue = String(row.original[col.id] ?? "");
+                    const rowId = row.original._rowId;
+                    const editKey = `${rowId}_${col.id}`;
+                    const cellValue = pendingEdits[editKey] ?? String(row.original[col.id] ?? "");
                     return (
                       <td
                         key={cell.id}
@@ -667,13 +690,14 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
                           onFocus={() =>
                             setFocusedCell({ row: rowIdx, col: colIdx })
                           }
-                          onSave={(val) =>
+                          onSave={(val) => {
+                            setPendingEdits((prev) => ({ ...prev, [editKey]: val }));
                             updateCell.mutate({
-                              rowId: row.original._rowId,
+                              rowId,
                               columnId: col.id,
                               cellValue: val,
-                            })
-                          }
+                            });
+                          }}
                         />
                       </td>
                     );
@@ -689,26 +713,26 @@ export function TableGrid({ tableId, groupByColumnId }: TableGridProps) {
             )}
           </tbody>
         </table>
-      </div>
-
-      <button
-        onClick={() => addRow.mutate({ tableId: table.id })}
-        disabled={addRow.isPending}
-        className="flex w-full items-center gap-2 border-b border-airtable-border px-4 py-2 text-[13px] text-airtable-text-muted hover:bg-airtable-row-hover hover:text-airtable-blue"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
+        <button
+          onClick={() => addRow.mutate({ tableId: table.id })}
+          disabled={addRow.isPending}
+          className="flex w-full items-center gap-2 border-b border-airtable-border px-4 py-2 text-[13px] text-airtable-text-muted hover:bg-airtable-row-hover hover:text-airtable-blue"
         >
-          <line x1="8" y1="3" x2="8" y2="13" />
-          <line x1="3" y1="8" x2="13" y2="8" />
-        </svg>
-        {addRow.isPending ? "Adding..." : "Add record"}
-      </button>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <line x1="8" y1="3" x2="8" y2="13" />
+            <line x1="3" y1="8" x2="13" y2="8" />
+          </svg>
+          {addRow.isPending ? "Adding..." : "Add record"}
+        </button>
+        </div>
+      </div>
     </div>
   );
 }

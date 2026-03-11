@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { faker } from "@faker-js/faker";
 import { TRPCError } from "@trpc/server";
+import type { Prisma } from "../../../../generated/prisma";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
 // ============================================================================
@@ -23,6 +24,84 @@ function generateFakeValue(fieldType: string): string {
   }
 }
 
+type FilterInput = { columnId: string; operator: string; value: string };
+type ColumnInfo = { id: string; fieldType: string };
+
+function buildCellCondition(filter: FilterInput, _fieldType: string) {
+  const { operator, value } = filter;
+
+  switch (operator) {
+    case "contains":
+      return { cellValue: { contains: value, mode: "insensitive" as const } };
+    case "not_contains":
+      return { cellValue: { not: { contains: value, mode: "insensitive" as const } } };
+    case "equals":
+      return { cellValue: value };
+    case "not_equals":
+      return { cellValue: { not: value } };
+    case "gt":
+      return { cellValue: { gt: value } };
+    case "lt":
+      return { cellValue: { lt: value } };
+    case "gte":
+      return { cellValue: { gte: value } };
+    case "lte":
+      return { cellValue: { lte: value } };
+    case "before":
+      return { cellValue: { lt: value } };
+    case "after":
+      return { cellValue: { gt: value } };
+    case "empty":
+      return { OR: [{ cellValue: null }, { cellValue: "" }] };
+    case "not_empty":
+      return {
+        AND: [
+          { cellValue: { not: null } },
+          { cellValue: { not: "" } },
+        ],
+      };
+    case "is_checked":
+      return { cellValue: "true" };
+    case "is_unchecked":
+      return {
+        OR: [
+          { cellValue: null },
+          { cellValue: "" },
+          { cellValue: "false" },
+        ],
+      };
+    default:
+      return {};
+  }
+}
+
+function buildRowsWhereClause(
+  tableId: string,
+  filters: FilterInput[],
+  columnMap: Record<string, ColumnInfo>,
+): Prisma.RowWhereInput {
+  const base: Prisma.RowWhereInput = { tableId };
+
+  if (filters.length === 0) return base;
+
+  const andConditions: Prisma.RowWhereInput[] = filters.map((filter) => {
+    const col = columnMap[filter.columnId];
+    const fieldType = col?.fieldType ?? "TEXT";
+    const cellCondition = buildCellCondition(filter, fieldType);
+
+    return {
+      cells: {
+        some: {
+          columnId: filter.columnId,
+          ...cellCondition,
+        },
+      },
+    };
+  });
+
+  return { ...base, AND: andConditions };
+}
+
 // ============================================================================
 // Input Schemas
 // ============================================================================
@@ -35,10 +114,18 @@ const GetByIdInput = z.object({
   id: z.string(),
 });
 
+const FilterConditionInput = z.object({
+  id: z.string(),
+  columnId: z.string(),
+  operator: z.string(),
+  value: z.string(),
+});
+
 const GetRowsInput = z.object({
   tableId: z.string(),
   limit: z.number().min(1).max(500).default(100),
   cursor: z.string().nullish(),
+  filters: z.array(FilterConditionInput).optional().default([]),
 });
 
 const CreateTableInput = z.object({
@@ -113,10 +200,20 @@ export const tableRouter = createTRPCRouter({
   getRows: publicProcedure
     .input(GetRowsInput)
     .query(async ({ ctx, input }) => {
-      const { tableId, limit, cursor } = input;
+      const { tableId, limit, cursor, filters } = input;
+
+      const table = await ctx.db.table.findUnique({
+        where: { id: tableId },
+        include: { columns: { orderBy: { displayOrder: "asc" } } },
+      });
+      const columnMap = Object.fromEntries(
+        (table?.columns ?? []).map((c) => [c.id, c]),
+      );
+
+      const whereClause = buildRowsWhereClause(tableId, filters, columnMap);
 
       const rows = await ctx.db.row.findMany({
-        where: { tableId },
+        where: whereClause,
         take: limit + 1,
         orderBy: { displayOrder: "asc" },
         include: { cells: true },

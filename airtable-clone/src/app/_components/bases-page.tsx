@@ -20,6 +20,7 @@ export function BasesPage() {
   const utils = api.useUtils();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBaseName, setNewBaseName] = useState("");
+  const [newBaseDescription, setNewBaseDescription] = useState("");
   const [selectedColor, setSelectedColor] = useState(BASE_COLORS[0]!);
 
   const createBase = api.base.create.useMutation({
@@ -27,6 +28,7 @@ export function BasesPage() {
       void utils.base.getAll.invalidate();
       setShowCreateModal(false);
       setNewBaseName("");
+      setNewBaseDescription("");
       setSelectedColor(BASE_COLORS[0]!);
     },
   });
@@ -122,9 +124,7 @@ export function BasesPage() {
                 <button
                   onClick={(e) => {
                     e.preventDefault();
-                    if (confirm(`Delete "${base.baseName}"? All tables and data will be lost.`)) {
-                      deleteBase.mutate({ id: base.id });
-                    }
+                    deleteBase.mutate({ id: base.id });
                   }}
                   className="absolute right-2 top-2 rounded-md bg-black/20 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100"
                   title="Delete base"
@@ -156,7 +156,7 @@ export function BasesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-gray-900">Create a new base</h2>
-            <p className="mt-1 text-sm text-gray-500">Give your base a name and pick a color</p>
+            <p className="mt-1 text-sm text-gray-500">Give your base a name, optional description, and pick a color</p>
             
             <form
               className="mt-6"
@@ -165,6 +165,7 @@ export function BasesPage() {
                 if (!newBaseName.trim()) return;
                 createBase.mutate({
                   baseName: newBaseName.trim(),
+                  description: newBaseDescription.trim() || undefined,
                   color: selectedColor,
                 });
               }}
@@ -181,6 +182,19 @@ export function BasesPage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-airtable-blue focus:ring-2 focus:ring-airtable-blue/20"
                     value={newBaseName}
                     onChange={(e) => setNewBaseName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Description <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Track riders, teams, and race results"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-airtable-blue focus:ring-2 focus:ring-airtable-blue/20"
+                    value={newBaseDescription}
+                    onChange={(e) => setNewBaseDescription(e.target.value)}
                   />
                 </div>
 
@@ -210,6 +224,7 @@ export function BasesPage() {
                   onClick={() => {
                     setShowCreateModal(false);
                     setNewBaseName("");
+                    setNewBaseDescription("");
                   }}
                   className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
                 >

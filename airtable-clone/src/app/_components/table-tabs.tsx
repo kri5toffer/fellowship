@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "~/trpc/react";
 import { TableGrid } from "./table-grid";
+import { FilterBar, type FilterCondition } from "./filter-bar";
+import { ViewsSidebar } from "./views-sidebar";
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   TEXT: (
@@ -36,6 +38,11 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [newTableName, setNewTableName] = useState("");
   const [groupByColumnId, setGroupByColumnId] = useState<string | null>(null);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [sortSearchQuery, setSortSearchQuery] = useState("");
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const [filters, setFilters] = useState<FilterCondition[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
@@ -48,11 +55,36 @@ export function TableTabs({ baseId }: { baseId: string }) {
   useEffect(() => {
     setActiveTableId(null);
     setGroupByColumnId(null);
+    setFilters([]);
+    setActiveViewId(null);
   }, [baseId]);
 
   useEffect(() => {
     setGroupByColumnId(null);
+    setFilters([]);
+    setActiveViewId(null);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
+        setShowSortMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showSortMenu]);
+
+  const handleSelectView = (view: {
+    id: string | null;
+    filters: FilterCondition[];
+    groupByColumnId: string | null;
+  }) => {
+    setActiveViewId(view.id);
+    setFilters(view.filters);
+    setGroupByColumnId(view.groupByColumnId);
+  };
 
   const createTable = api.table.create.useMutation({
     onSuccess: (newTable) => {
@@ -72,6 +104,12 @@ export function TableTabs({ baseId }: { baseId: string }) {
     },
   });
 
+  const updateView = api.view.update.useMutation({
+    onSuccess: () => {
+      void utils.view.getByTable.invalidate({ tableId: selectedId ?? "" });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center text-airtable-text-muted">
@@ -85,7 +123,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
   };
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-end gap-0.5 bg-airtable-teal px-2 pt-2">
         {tableList.map((t) => (
           <button
@@ -169,24 +207,120 @@ export function TableTabs({ baseId }: { baseId: string }) {
             Hide fields
           </button>
 
-          <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M1 2h14l-5 6v5l-4 2V8L1 2z" />
-            </svg>
-            Filter
-          </button>
+          <FilterBar
+            columns={activeTable?.columns ?? []}
+            filters={filters}
+            onChange={(f) => {
+              setFilters(f);
+              if (activeViewId) {
+                updateView.mutate({
+                  id: activeViewId,
+                  filters: f,
+                  groupByColumnId: groupByColumnId ?? undefined,
+                });
+              }
+            }}
+          />
 
-          <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 4h12M4 8h8M6 12h4" />
-            </svg>
-            Sort
-          </button>
+          {/* Sort button */}
+          <div ref={sortMenuRef} className="relative">
+            <button
+              onClick={() => {
+                setShowSortMenu(!showSortMenu);
+                setShowGroupMenu(false);
+              }}
+              className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M2 4h12M4 8h8M6 12h4" />
+              </svg>
+              Sort
+            </button>
+
+            {showSortMenu && (
+              <div
+                className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="border-b border-gray-100 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] font-medium text-airtable-text-primary">
+                        {groupByColumnId ? "Sort within groups by" : "Sort by"}
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        title="Learn more"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0-1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z" />
+                          <path d="M9 5.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zM8 7v4h1V7H8z" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[12px] text-airtable-blue hover:underline"
+                    >
+                      Copy from a view
+                    </button>
+                  </div>
+                </div>
+                <div className="p-2">
+                  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400">
+                      <circle cx="7" cy="7" r="4" />
+                      <path d="M10 10l3 3" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Find a field"
+                      value={sortSearchQuery}
+                      onChange={(e) => setSortSearchQuery(e.target.value)}
+                      className="flex-1 bg-transparent text-[13px] text-airtable-text-primary outline-none placeholder:text-gray-400"
+                    />
+                  </div>
+                </div>
+                <div className="max-h-[240px] overflow-y-auto py-1">
+                  {activeTable?.columns
+                    .filter(
+                      (col) =>
+                        !sortSearchQuery ||
+                        col.columnName.toLowerCase().includes(sortSearchQuery.toLowerCase())
+                    )
+                    .map((col) => (
+                      <button
+                        key={col.id}
+                        type="button"
+                        onClick={() => setShowSortMenu(false)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                      >
+                        <span className="shrink-0">{FIELD_TYPE_ICONS[col.fieldType] ?? FIELD_TYPE_ICONS.TEXT}</span>
+                        <span className="truncate">{col.columnName}</span>
+                      </button>
+                    ))}
+                  {activeTable?.columns.filter(
+                    (col) =>
+                      !sortSearchQuery ||
+                      col.columnName.toLowerCase().includes(sortSearchQuery.toLowerCase())
+                  ).length === 0 && (
+                    <div className="px-3 py-4 text-center text-[12px] text-gray-400">
+                      No fields match
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Group button */}
           <div className="relative">
             <button
-              onClick={() => setShowGroupMenu(!showGroupMenu)}
+              onClick={() => {
+                setShowGroupMenu(!showGroupMenu);
+                setShowSortMenu(false);
+              }}
               className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] ${
                 groupByColumnId
                   ? "bg-purple-50 text-purple-700"
@@ -216,7 +350,15 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   <button
                     key={col.id}
                     onClick={() => {
-                      setGroupByColumnId(col.id === groupByColumnId ? null : col.id);
+                      const newGroupBy = col.id === groupByColumnId ? null : col.id;
+                      setGroupByColumnId(newGroupBy);
+                      if (activeViewId) {
+                        updateView.mutate({
+                          id: activeViewId,
+                          filters,
+                          groupByColumnId: newGroupBy ?? undefined,
+                        });
+                      }
                       setShowGroupMenu(false);
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-gray-50 ${
@@ -238,6 +380,13 @@ export function TableTabs({ baseId }: { baseId: string }) {
                     <button
                       onClick={() => {
                         setGroupByColumnId(null);
+                        if (activeViewId) {
+                          updateView.mutate({
+                            id: activeViewId,
+                            filters,
+                            groupByColumnId: null,
+                          });
+                        }
                         setShowGroupMenu(false);
                       }}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
@@ -282,11 +431,26 @@ export function TableTabs({ baseId }: { baseId: string }) {
         </div>
       )}
 
-      <div className="flex-1 overflow-hidden bg-white">
+      <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
         {selectedId ? (
-          <TableGrid tableId={selectedId} groupByColumnId={groupByColumnId} />
+          <>
+            <ViewsSidebar
+              tableId={selectedId}
+              activeViewId={activeViewId}
+              filters={filters}
+              groupByColumnId={groupByColumnId}
+              onSelectView={handleSelectView}
+            />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <TableGrid
+                tableId={selectedId}
+                groupByColumnId={groupByColumnId}
+                filters={filters}
+              />
+            </div>
+          </>
         ) : (
-          <div className="flex h-64 items-center justify-center text-airtable-text-muted">
+          <div className="flex flex-1 items-center justify-center text-airtable-text-muted">
             Create a table to get started
           </div>
         )}

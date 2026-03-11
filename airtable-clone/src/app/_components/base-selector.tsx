@@ -98,9 +98,7 @@ export function BaseSelector({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm(`Delete "${base.baseName}"? This will delete all tables and data in this base.`)) {
-                    deleteBase.mutate({ id: base.id });
-                  }
+                  deleteBase.mutate({ id: base.id });
                   setMenuOpenId(null);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
