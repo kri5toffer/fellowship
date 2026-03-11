@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { api } from "~/trpc/react";
 import { TableGrid } from "./table-grid";
-import { FilterBar, type FilterCondition } from "./filter-bar";
 
 export function TableTabs({ baseId }: { baseId: string }) {
   const { data: tables, isLoading } = api.table.getAll.useQuery({ baseId });
@@ -11,19 +10,12 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [creatingTable, setCreatingTable] = useState(false);
   const [newTableName, setNewTableName] = useState("");
-  const [filters, setFilters] = useState<FilterCondition[]>([]);
 
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
 
-  const { data: activeTable } = api.table.getById.useQuery(
-    { id: selectedId ?? "" },
-    { enabled: !!selectedId },
-  );
-
   useEffect(() => {
     setActiveTableId(null);
-    setFilters([]);
   }, [baseId]);
 
   const createTable = api.table.create.useMutation({
@@ -32,6 +24,15 @@ export function TableTabs({ baseId }: { baseId: string }) {
       setActiveTableId(newTable.id);
       setCreatingTable(false);
       setNewTableName("");
+    },
+  });
+
+  const addBulkRows = api.table.addBulkRows.useMutation({
+    onSuccess: () => {
+      if (selectedId) {
+        void utils.table.getRows.invalidate({ tableId: selectedId });
+        void utils.table.getById.invalidate({ id: selectedId });
+      }
     },
   });
 
@@ -45,12 +46,10 @@ export function TableTabs({ baseId }: { baseId: string }) {
 
   const handleTableSwitch = (id: string) => {
     setActiveTableId(id);
-    setFilters([]);
   };
 
   return (
     <div className="flex flex-1 flex-col">
-      {/* Table tabs bar - Airtable style with colored background */}
       <div className="flex items-end gap-0.5 bg-airtable-teal px-2 pt-2">
         {tableList.map((t) => (
           <button
@@ -115,10 +114,8 @@ export function TableTabs({ baseId }: { baseId: string }) {
         )}
       </div>
 
-      {/* View toolbar - Grid view, Filter, Sort, etc. */}
-      {selectedId && activeTable && (
+      {selectedId && (
         <div className="flex items-center gap-1 border-b border-airtable-border bg-white px-3 py-1.5">
-          {/* View selector */}
           <div className="flex items-center gap-1.5 rounded-sm bg-airtable-blue/10 px-2.5 py-1">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-airtable-blue">
               <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v1h14V2a1 1 0 0 0-1-1H2zM1 5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V5H1z"/>
@@ -128,7 +125,6 @@ export function TableTabs({ baseId }: { baseId: string }) {
 
           <div className="mx-2 h-4 w-px bg-airtable-border" />
 
-          {/* Hide fields button */}
           <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M8 3.5c-3.5 0-6 4.5-6 4.5s2.5 4.5 6 4.5 6-4.5 6-4.5-2.5-4.5-6-4.5z" />
@@ -137,26 +133,13 @@ export function TableTabs({ baseId }: { baseId: string }) {
             Hide fields
           </button>
 
-          {/* Filter */}
-          <FilterBar
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            columns={activeTable.columns}
-            filters={filters}
-            onChange={setFilters}
-          />
-
-          {/* Group button */}
           <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="2" y="2" width="4" height="4" rx="1" />
-              <rect x="2" y="10" width="4" height="4" rx="1" />
-              <rect x="10" y="2" width="4" height="4" rx="1" />
-              <rect x="10" y="10" width="4" height="4" rx="1" />
+              <path d="M1 2h14l-5 6v5l-4 2V8L1 2z" />
             </svg>
-            Group
+            Filter
           </button>
 
-          {/* Sort button */}
           <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M2 4h12M4 8h8M6 12h4" />
@@ -164,17 +147,8 @@ export function TableTabs({ baseId }: { baseId: string }) {
             Sort
           </button>
 
-          {/* Color button */}
-          <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-airtable-yellow">
-              <circle cx="8" cy="8" r="6" />
-            </svg>
-            Color
-          </button>
-
           <div className="flex-1" />
 
-          {/* Search */}
           <button className="flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <circle cx="7" cy="7" r="4" />
@@ -182,13 +156,29 @@ export function TableTabs({ baseId }: { baseId: string }) {
             </svg>
             Search
           </button>
+
+          <div className="mx-2 h-4 w-px bg-airtable-border" />
+
+          <button
+            onClick={() => {
+              if (selectedId && !addBulkRows.isPending) {
+                addBulkRows.mutate({ tableId: selectedId, count: 100_000 });
+              }
+            }}
+            disabled={addBulkRows.isPending}
+            className="flex items-center gap-1.5 rounded-sm bg-amber-50 px-2.5 py-1 text-[13px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M8 2v12M2 8h12" />
+            </svg>
+            {addBulkRows.isPending ? "Inserting rows..." : "Add 100k rows"}
+          </button>
         </div>
       )}
 
-      {/* Grid area */}
-      <div className="flex-1 overflow-auto bg-white">
+      <div className="flex-1 overflow-hidden bg-white">
         {selectedId ? (
-          <TableGrid tableId={selectedId} filters={filters} />
+          <TableGrid tableId={selectedId} />
         ) : (
           <div className="flex h-64 items-center justify-center text-airtable-text-muted">
             Create a table to get started

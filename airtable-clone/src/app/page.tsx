@@ -1,7 +1,6 @@
 import { HydrateClient } from "~/trpc/server";
 import { AppShell } from "./_components/app-shell";
 
-// Disable static prerendering - page needs database at runtime
 export const dynamic = "force-dynamic";
 
 export default function Home() {
