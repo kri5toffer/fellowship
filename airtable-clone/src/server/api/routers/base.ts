@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
 // ============================================================================
 // Input Schemas
@@ -58,9 +58,7 @@ export const baseRouter = createTRPCRouter({
       return base;
     }),
 
-  // ---- Protected (write) procedures ----
-
-  create: protectedProcedure
+  create: publicProcedure
     .input(CreateInput)
     .mutation(async ({ ctx, input }) => {
       const maxOrder = await ctx.db.base.aggregate({ _max: { displayOrder: true } });
@@ -70,12 +68,11 @@ export const baseRouter = createTRPCRouter({
           description: input.description,
           color: input.color ?? "#1d7c6a",
           displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
-          createdById: ctx.user?.id,
         },
       });
     }),
 
-  update: protectedProcedure
+  update: publicProcedure
     .input(UpdateInput)
     .mutation(async ({ ctx, input }) => {
       const existing = await ctx.db.base.findUnique({
@@ -99,7 +96,7 @@ export const baseRouter = createTRPCRouter({
       });
     }),
 
-  delete: protectedProcedure
+  delete: publicProcedure
     .input(DeleteInput)
     .mutation(async ({ ctx, input }) => {
       const existing = await ctx.db.base.findUnique({

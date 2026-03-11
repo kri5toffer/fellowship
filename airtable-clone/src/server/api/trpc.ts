@@ -24,22 +24,9 @@ import { db } from "~/server/db";
  *
  * @see https://trpc.io/docs/server/context
  */
-/**
- * User type for authentication context (extend when adding auth)
- */
-export interface AuthUser {
-  id: string;
-  email: string;
-  name?: string | null;
-}
-
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  // TODO: Extract user from session/token when auth is implemented
-  const user: AuthUser | null = null;
-
   return {
     db,
-    user,
     ...opts,
   };
 };
@@ -117,11 +104,3 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * are logged in.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
-
-/**
- * Protected (authenticated) procedure
- *
- * Use this for mutations and sensitive operations that require authentication.
- * Currently acts the same as publicProcedure until auth is implemented.
- */
-export const protectedProcedure = t.procedure.use(timingMiddleware);

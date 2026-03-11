@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { faker } from "@faker-js/faker";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 
 // ============================================================================
 // Shared Enums & Helpers
@@ -132,9 +132,7 @@ export const tableRouter = createTRPCRouter({
       return { rows, nextCursor };
     }),
 
-  // ---- Protected (write) procedures ----
-
-  create: protectedProcedure
+  create: publicProcedure
     .input(CreateTableInput)
     .mutation(async ({ ctx, input }) => {
       // Verify base exists
@@ -159,12 +157,11 @@ export const tableRouter = createTRPCRouter({
           baseId: input.baseId,
           tableName: input.tableName,
           displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
-          createdById: ctx.user?.id,
         },
       });
     }),
 
-  createColumn: protectedProcedure
+  createColumn: publicProcedure
     .input(CreateColumnInput)
     .mutation(async ({ ctx, input }) => {
       // Verify table exists
@@ -190,12 +187,11 @@ export const tableRouter = createTRPCRouter({
           columnName: input.columnName,
           fieldType: input.fieldType,
           displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
-          createdById: ctx.user?.id,
         },
       });
     }),
 
-  createRow: protectedProcedure
+  createRow: publicProcedure
     .input(CreateRowInput)
     .mutation(async ({ ctx, input }) => {
       // Verify table exists
@@ -223,7 +219,6 @@ export const tableRouter = createTRPCRouter({
         data: {
           tableId: input.tableId,
           displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
-          createdById: ctx.user?.id,
           cells: {
             create: columns.map((col) => ({
               columnId: col.id,
@@ -235,7 +230,7 @@ export const tableRouter = createTRPCRouter({
       });
     }),
 
-  updateCell: protectedProcedure
+  updateCell: publicProcedure
     .input(UpdateCellInput)
     .mutation(async ({ ctx, input }) => {
       return ctx.db.cell.upsert({
@@ -254,7 +249,7 @@ export const tableRouter = createTRPCRouter({
       });
     }),
 
-  deleteRow: protectedProcedure
+  deleteRow: publicProcedure
     .input(DeleteRowInput)
     .mutation(async ({ ctx, input }) => {
       const row = await ctx.db.row.findUnique({
@@ -273,7 +268,7 @@ export const tableRouter = createTRPCRouter({
       });
     }),
 
-  deleteColumn: protectedProcedure
+  deleteColumn: publicProcedure
     .input(DeleteColumnInput)
     .mutation(async ({ ctx, input }) => {
       const column = await ctx.db.column.findUnique({
@@ -292,7 +287,7 @@ export const tableRouter = createTRPCRouter({
       });
     }),
 
-  addBulkRows: protectedProcedure
+  addBulkRows: publicProcedure
     .input(AddBulkRowsInput)
     .mutation(async ({ ctx, input }) => {
       const { tableId, count } = input;
