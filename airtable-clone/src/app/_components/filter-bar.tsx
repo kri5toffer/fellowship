@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type FilterCondition = {
   id: string;
@@ -61,14 +61,33 @@ export function FilterBar({
   onChange: (filters: FilterCondition[]) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<FilterCondition[]>(filters);
   const activeCount = filters.length;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Sync draft from committed filters when panel opens
+  useEffect(() => {
+    if (isOpen) setDraftFilters(filters);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setIsOpen(false); // discard draft, don't call onChange
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isOpen]);
 
   function addFilter() {
     const firstCol = columns[0];
     if (!firstCol) return;
     const ops = OPERATORS_BY_TYPE[firstCol.fieldType] ?? OPERATORS_BY_TYPE.TEXT!;
-    onChange([
-      ...filters,
+    setDraftFilters((prev) => [
+      ...prev,
       {
         id: `f_${++nextFilterId}`,
         columnId: firstCol.id,
@@ -80,8 +99,8 @@ export function FilterBar({
   }
 
   function updateFilter(id: string, updates: Partial<FilterCondition>) {
-    onChange(
-      filters.map((f) => {
+    setDraftFilters((prev) =>
+      prev.map((f) => {
         if (f.id !== id) return f;
         const updated = { ...f, ...updates };
         if (updates.columnId && updates.columnId !== f.columnId) {
@@ -96,13 +115,11 @@ export function FilterBar({
   }
 
   function removeFilter(id: string) {
-    const updated = filters.filter((f) => f.id !== id);
-    onChange(updated);
-    if (updated.length === 0) setIsOpen(false);
+    setDraftFilters((prev) => prev.filter((f) => f.id !== id));
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={panelRef}>
       <button
         onClick={() => {
           if (filters.length === 0) {
@@ -141,7 +158,7 @@ export function FilterBar({
 
           <div className="max-h-[300px] overflow-auto px-4 py-3">
             <div className="flex flex-col gap-2">
-              {filters.map((filter, idx) => {
+              {draftFilters.map((filter, idx) => {
                 const col = columns.find((c) => c.id === filter.columnId);
                 const ops = OPERATORS_BY_TYPE[col?.fieldType ?? "TEXT"] ?? OPERATORS_BY_TYPE.TEXT!;
                 const needsValue = !NO_VALUE_OPERATORS.has(filter.operator);
@@ -165,7 +182,13 @@ export function FilterBar({
                     <select
                       className="rounded-md border border-airtable-border bg-white px-2.5 py-1.5 text-[13px] text-airtable-text-primary outline-none focus:border-airtable-blue focus:ring-1 focus:ring-airtable-blue"
                       value={filter.operator}
-                      onChange={(e) => updateFilter(filter.id, { operator: e.target.value })}
+                      onChange={(e) => {
+                        const op = e.target.value;
+                        updateFilter(filter.id, {
+                          operator: op,
+                          value: NO_VALUE_OPERATORS.has(op) ? "" : filter.value,
+                        });
+                      }}
                     >
                       {ops.map((op) => (
                         <option key={op.value} value={op.value}>{op.label}</option>
@@ -210,16 +233,16 @@ export function FilterBar({
             </button>
             
             <div className="flex items-center gap-2">
-              {filters.length > 0 && (
+              {draftFilters.length > 0 && (
                 <button
-                  onClick={() => { onChange([]); setIsOpen(false); }}
+                  onClick={() => { setDraftFilters([]); onChange([]); setIsOpen(false); }}
                   className="rounded px-3 py-1.5 text-[13px] text-airtable-text-secondary hover:bg-gray-100"
                 >
                   Clear all
                 </button>
               )}
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => { onChange(draftFilters); setIsOpen(false); }}
                 className="rounded bg-airtable-blue px-3 py-1.5 text-[13px] font-medium text-white hover:bg-airtable-blue/90"
               >
                 Done

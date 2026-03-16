@@ -126,6 +126,7 @@ const GetRowsInput = z.object({
   limit: z.number().min(1).max(500).default(100),
   cursor: z.string().nullish(),
   filters: z.array(FilterConditionInput).optional().default([]),
+  search: z.string().optional().default(""),
 });
 
 const CreateTableInput = z.object({
@@ -157,9 +158,23 @@ const DeleteColumnInput = z.object({
   columnId: z.string(),
 });
 
+const RenameColumnInput = z.object({
+  columnId: z.string(),
+  columnName: z.string().min(1),
+});
+
 const AddBulkRowsInput = z.object({
   tableId: z.string(),
   count: z.number().min(1).max(200_000).default(100_000),
+});
+
+const DeleteTableInput = z.object({
+  tableId: z.string(),
+});
+
+const RenameTableInput = z.object({
+  tableId: z.string(),
+  tableName: z.string().min(1),
 });
 
 // ============================================================================
@@ -200,7 +215,7 @@ export const tableRouter = createTRPCRouter({
   getRows: publicProcedure
     .input(GetRowsInput)
     .query(async ({ ctx, input }) => {
-      const { tableId, limit, cursor, filters } = input;
+      const { tableId, limit, cursor, filters, search } = input;
 
       const table = await ctx.db.table.findUnique({
         where: { id: tableId },
@@ -211,6 +226,13 @@ export const tableRouter = createTRPCRouter({
       );
 
       const whereClause = buildRowsWhereClause(tableId, filters, columnMap);
+
+      if (search) {
+        whereClause.AND = [
+          ...(Array.isArray(whereClause.AND) ? whereClause.AND : []),
+          { cells: { some: { cellValue: { contains: search, mode: "insensitive" as const } } } },
+        ];
+      }
 
       const rows = await ctx.db.row.findMany({
         where: whereClause,
@@ -249,12 +271,45 @@ export const tableRouter = createTRPCRouter({
         _max: { displayOrder: true },
       });
 
-      return ctx.db.table.create({
-        data: {
-          baseId: input.baseId,
-          tableName: input.tableName,
-          displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
-        },
+      const defaultColumns = [
+        { columnName: "Name", fieldType: "TEXT" as const, displayOrder: 0 },
+        { columnName: "Age", fieldType: "NUMBER" as const, displayOrder: 1 },
+        { columnName: "Date", fieldType: "DATE" as const, displayOrder: 2 },
+      ];
+
+      return ctx.db.$transaction(async (tx) => {
+        const table = await tx.table.create({
+          data: {
+            baseId: input.baseId,
+            tableName: input.tableName,
+            displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
+            columns: { create: defaultColumns },
+          },
+          include: { columns: { orderBy: { displayOrder: "asc" } } },
+        });
+
+        const rowsData = Array.from({ length: 3 }, (_, i) => ({
+          tableId: table.id,
+          displayOrder: i,
+        }));
+        await tx.row.createMany({ data: rowsData });
+
+        const createdRows = await tx.row.findMany({
+          where: { tableId: table.id },
+          orderBy: { displayOrder: "asc" },
+          select: { id: true },
+        });
+
+        const cellData = createdRows.flatMap((row) =>
+          table.columns.map((col) => ({
+            rowId: row.id,
+            columnId: col.id,
+            cellValue: generateFakeValue(col.fieldType),
+          })),
+        );
+        await tx.cell.createMany({ data: cellData });
+
+        return table;
       });
     }),
 
@@ -384,6 +439,26 @@ export const tableRouter = createTRPCRouter({
       });
     }),
 
+  renameColumn: publicProcedure
+    .input(RenameColumnInput)
+    .mutation(async ({ ctx, input }) => {
+      const column = await ctx.db.column.findUnique({
+        where: { id: input.columnId },
+      });
+
+      if (!column) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Column with ID "${input.columnId}" not found`,
+        });
+      }
+
+      return ctx.db.column.update({
+        where: { id: input.columnId },
+        data: { columnName: input.columnName },
+      });
+    }),
+
   addBulkRows: publicProcedure
     .input(AddBulkRowsInput)
     .mutation(async ({ ctx, input }) => {
@@ -450,5 +525,25 @@ export const tableRouter = createTRPCRouter({
       }
 
       return { inserted: count };
+    }),
+
+  deleteTable: publicProcedure
+    .input(DeleteTableInput)
+    .mutation(async ({ ctx, input }) => {
+      const table = await ctx.db.table.findUnique({ where: { id: input.tableId } });
+      if (!table) {
+        throw new TRPCError({ code: "NOT_FOUND", message: `Table with ID "${input.tableId}" not found` });
+      }
+      return ctx.db.table.delete({ where: { id: input.tableId } });
+    }),
+
+  renameTable: publicProcedure
+    .input(RenameTableInput)
+    .mutation(async ({ ctx, input }) => {
+      const table = await ctx.db.table.findUnique({ where: { id: input.tableId } });
+      if (!table) {
+        throw new TRPCError({ code: "NOT_FOUND", message: `Table with ID "${input.tableId}" not found` });
+      }
+      return ctx.db.table.update({ where: { id: input.tableId }, data: { tableName: input.tableName } });
     }),
 });

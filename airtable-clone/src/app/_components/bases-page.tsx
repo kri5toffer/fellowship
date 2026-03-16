@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Boxes, Plus, Settings } from "lucide-react";
 import { api } from "~/trpc/react";
 
 const BASE_COLORS = [
@@ -22,10 +23,27 @@ export function BasesPage() {
   const [newBaseName, setNewBaseName] = useState("");
   const [newBaseDescription, setNewBaseDescription] = useState("");
   const [selectedColor, setSelectedColor] = useState(BASE_COLORS[0]!);
+  const [renamingBaseId, setRenamingBaseId] = useState<string | null>(null);
+  const [renameBaseValue, setRenameBaseValue] = useState("");
 
   const createBase = api.base.create.useMutation({
-    onSuccess: () => {
+    onMutate: async (variables) => {
+      await utils.base.getAll.cancel();
+      const previousBases = utils.base.getAll.getData();
+      utils.base.getAll.setData(undefined, (old) => [
+        ...(old ?? []),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { id: `temp-${Date.now()}`, baseName: variables.baseName, color: variables.color ?? "#2d7ff9", description: variables.description ?? null } as any,
+      ]);
+      return { previousBases };
+    },
+    onError: (_err, _variables, context) => {
+      utils.base.getAll.setData(undefined, context?.previousBases);
+    },
+    onSettled: () => {
       void utils.base.getAll.invalidate();
+    },
+    onSuccess: () => {
       setShowCreateModal(false);
       setNewBaseName("");
       setNewBaseDescription("");
@@ -33,8 +51,35 @@ export function BasesPage() {
     },
   });
 
+  const renameBase = api.base.update.useMutation({
+    onMutate: async (variables) => {
+      await utils.base.getAll.cancel();
+      const previousBases = utils.base.getAll.getData();
+      utils.base.getAll.setData(undefined, (old) =>
+        (old ?? []).map((b) => b.id === variables.id ? { ...b, baseName: variables.baseName ?? b.baseName } : b),
+      );
+      return { previousBases };
+    },
+    onError: (_err, _variables, context) => {
+      utils.base.getAll.setData(undefined, context?.previousBases);
+    },
+    onSettled: () => { void utils.base.getAll.invalidate(); },
+    onSuccess: () => { setRenamingBaseId(null); setRenameBaseValue(""); },
+  });
+
   const deleteBase = api.base.delete.useMutation({
-    onSuccess: () => {
+    onMutate: async (variables) => {
+      await utils.base.getAll.cancel();
+      const previousBases = utils.base.getAll.getData();
+      utils.base.getAll.setData(undefined, (old) =>
+        (old ?? []).filter((b) => b.id !== variables.id),
+      );
+      return { previousBases };
+    },
+    onError: (_err, _variables, context) => {
+      utils.base.getAll.setData(undefined, context?.previousBases);
+    },
+    onSettled: () => {
       void utils.base.getAll.invalidate();
     },
   });
@@ -42,15 +87,32 @@ export function BasesPage() {
   const baseList = bases ?? [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Left sidebar - Airtable style */}
+      <aside className="flex w-12 shrink-0 flex-col items-center border-r border-airtable-border bg-airtable-sidebar-bg py-3">
+        <Link
+          href="/"
+          title="All bases"
+          className="inline-flex size-8 items-center justify-center rounded-lg text-airtable-text-secondary transition-colors hover:bg-gray-200 hover:text-airtable-text-primary"
+        >
+          <Boxes className="size-5 text-airtable-text-primary" />
+        </Link>
+        <button
+          type="button"
+          className="mt-2 inline-flex size-8 items-center justify-center rounded-lg text-airtable-text-muted transition-colors hover:bg-gray-200 hover:text-airtable-text-secondary"
+          title="Settings"
+        >
+          <Settings className="size-5" />
+        </button>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* Header */}
       <header className="border-b border-gray-200 bg-white px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-airtable-blue">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <Boxes className="size-5 text-white" />
             </div>
             <span className="text-xl font-semibold text-gray-900">Airtable Clone</span>
           </div>
@@ -76,10 +138,7 @@ export function BasesPage() {
               className="group flex h-[140px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white transition-all hover:border-airtable-blue hover:bg-blue-50"
             >
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors group-hover:bg-airtable-blue group-hover:text-white">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
+                <Plus className="size-6" />
               </div>
               <span className="text-sm font-medium text-gray-600 group-hover:text-airtable-blue">
                 Create new base
@@ -98,27 +157,69 @@ export function BasesPage() {
                   style={{ backgroundColor: base.color }}
                 />
                 
-                <Link
-                  href={`/base/${base.id}`}
-                  className="flex flex-1 items-center gap-3 px-4"
-                >
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
-                    style={{ backgroundColor: base.color }}
+                {renamingBaseId === base.id ? (
+                  <div className="flex flex-1 items-center gap-3 px-4">
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
+                      style={{ backgroundColor: base.color }}
+                    >
+                      {renameBaseValue.charAt(0).toUpperCase() || base.baseName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <input
+                        autoFocus
+                        value={renameBaseValue}
+                        onChange={(e) => setRenameBaseValue(e.target.value)}
+                        onBlur={() => {
+                          if (renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
+                          else { setRenamingBaseId(null); setRenameBaseValue(""); }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
+                          if (e.key === "Escape") { setRenamingBaseId(null); setRenameBaseValue(""); }
+                        }}
+                        className="w-full truncate rounded border border-airtable-blue px-1 py-0.5 text-sm font-semibold text-gray-900 outline-none"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <Link
+                    href={`/base/${base.id}`}
+                    className="flex flex-1 items-center gap-3 px-4"
                   >
-                    {base.baseName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold text-gray-900">
-                      {base.baseName}
-                    </h3>
-                    {base.description && (
-                      <p className="truncate text-xs text-gray-500">
-                        {base.description}
-                      </p>
-                    )}
-                  </div>
-                </Link>
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
+                      style={{ backgroundColor: base.color }}
+                    >
+                      {base.baseName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold text-gray-900">
+                        {base.baseName}
+                      </h3>
+                      {base.description && (
+                        <p className="truncate text-xs text-gray-500">
+                          {base.description}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                )}
+
+                {/* Rename button */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setRenamingBaseId(base.id);
+                    setRenameBaseValue(base.baseName);
+                  }}
+                  className="absolute right-9 top-2 rounded-md bg-black/20 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100"
+                  title="Rename base"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M11 2l3 3-8 8H3v-3L11 2z"/>
+                  </svg>
+                </button>
 
                 {/* Delete button */}
                 <button
@@ -141,9 +242,7 @@ export function BasesPage() {
         {!isLoading && baseList.length === 0 && (
           <div className="mt-8 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <Boxes className="size-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900">No bases yet</h3>
             <p className="mt-1 text-sm text-gray-500">Get started by creating your first base</p>
@@ -242,6 +341,7 @@ export function BasesPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

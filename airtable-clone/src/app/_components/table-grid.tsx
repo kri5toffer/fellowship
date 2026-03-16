@@ -181,6 +181,42 @@ function CellInput({
   );
 }
 
+function ColumnRenameInput({
+  initialValue,
+  onCommit,
+  onCancel,
+}: {
+  initialValue: string;
+  onCommit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <form
+      className="flex flex-1 items-center"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim()) onCommit(value.trim());
+      }}
+    >
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          if (value.trim()) onCommit(value.trim());
+          else onCancel();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onCancel();
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded border border-airtable-blue bg-white px-1.5 py-0.5 text-[13px] font-medium text-airtable-text-primary outline-none"
+      />
+    </form>
+  );
+}
+
 type FlatRow = {
   _rowId: string;
   _groupValue?: string;
@@ -192,10 +228,19 @@ interface TableGridProps {
   tableId: string;
   groupByColumnId?: string | null;
   filters?: { id: string; columnId: string; operator: string; value: string }[];
+  searchQuery?: string;
+  hiddenFieldIds?: string[];
+  sortConfig?: { columnId: string; direction: "asc" | "desc" } | null;
 }
 
-export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridProps) {
+export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery = "", hiddenFieldIds = [], sortConfig = null }: TableGridProps) {
   const utils = api.useUtils();
+
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const { data: table, isLoading: isLoadingMeta } = api.table.getById.useQuery(
     { id: tableId },
@@ -217,6 +262,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
         operator,
         value,
       })),
+      search: debouncedSearch,
     },
     { getNextPageParam: (lastPage) => lastPage.nextCursor },
   );
@@ -229,6 +275,44 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
   const [pendingEdits, setPendingEdits] = useState<Record<string, string>>({});
 
   const updateCell = api.table.updateCell.useMutation({
+    onMutate: async (variables) => {
+      const queryInput = {
+        tableId,
+        limit: 100,
+        filters: filters.map(({ id, columnId, operator, value }) => ({
+          id,
+          columnId,
+          operator,
+          value,
+        })),
+        search: debouncedSearch,
+      };
+      await utils.table.getRows.cancel({ tableId });
+      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
+      utils.table.getRows.setInfiniteData(queryInput, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            rows: page.rows.map(
+              (row: { id: string; cells: { columnId: string; cellValue: string | null }[] }) =>
+                row.id === variables.rowId
+                  ? {
+                      ...row,
+                      cells: row.cells.map((cell) =>
+                        cell.columnId === variables.columnId
+                          ? { ...cell, cellValue: variables.cellValue }
+                          : cell,
+                      ),
+                    }
+                  : row,
+            ),
+          })),
+        };
+      });
+      return { previousRows, queryInput };
+    },
     onSuccess: (_, variables) => {
       const key = `${variables.rowId}_${variables.columnId}`;
       setPendingEdits((prev) => {
@@ -236,32 +320,178 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
         delete next[key];
         return next;
       });
-      invalidateAll();
     },
-    onError: (_, variables) => {
+    onError: (_, variables, context) => {
       const key = `${variables.rowId}_${variables.columnId}`;
       setPendingEdits((prev) => {
         const next = { ...prev };
         delete next[key];
         return next;
       });
+      if (context?.previousRows !== undefined) {
+        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+      }
+    },
+    onSettled: () => {
+      invalidateAll();
     },
   });
 
   const addRow = api.table.createRow.useMutation({
-    onSuccess: invalidateAll,
+    onMutate: async () => {
+      const queryInput = {
+        tableId,
+        limit: 100,
+        filters: filters.map(({ id, columnId, operator, value }) => ({
+          id,
+          columnId,
+          operator,
+          value,
+        })),
+        search: debouncedSearch,
+      };
+      await utils.table.getRows.cancel({ tableId });
+      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
+      const tempRow = {
+        id: `temp-${Date.now()}`,
+        cells: (table?.columns ?? []).map((col) => ({
+          columnId: col.id,
+          cellValue: null,
+        })),
+      };
+      utils.table.getRows.setInfiniteData(queryInput, (old) => {
+        if (!old) return old;
+        const lastPageIndex = old.pages.length - 1;
+        return {
+          ...old,
+          pages: old.pages.map((page, i) =>
+            i === lastPageIndex
+              ? { ...page, rows: [...page.rows, tempRow] }
+              : page,
+          ),
+        };
+      });
+      return { previousRows, queryInput };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousRows !== undefined) {
+        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+      }
+    },
+    onSettled: () => {
+      invalidateAll();
+    },
   });
 
   const deleteRow = api.table.deleteRow.useMutation({
-    onSuccess: invalidateAll,
+    onMutate: async (variables) => {
+      const queryInput = {
+        tableId,
+        limit: 100,
+        filters: filters.map(({ id, columnId, operator, value }) => ({
+          id,
+          columnId,
+          operator,
+          value,
+        })),
+        search: debouncedSearch,
+      };
+      await utils.table.getRows.cancel({ tableId });
+      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
+      utils.table.getRows.setInfiniteData(queryInput, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            rows: page.rows.filter(
+              (row: { id: string }) => row.id !== variables.rowId,
+            ),
+          })),
+        };
+      });
+      return { previousRows, queryInput };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousRows !== undefined) {
+        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+      }
+    },
+    onSettled: () => {
+      invalidateAll();
+    },
   });
 
   const addColumn = api.table.createColumn.useMutation({
-    onSuccess: invalidateAll,
+    onMutate: async (variables) => {
+      await utils.table.getById.cancel({ id: tableId });
+      const previousTable = utils.table.getById.getData({ id: tableId });
+      utils.table.getById.setData({ id: tableId }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columns: [
+            ...old.columns,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            { id: `temp-${Date.now()}`, columnName: variables.columnName, fieldType: variables.fieldType, tableId } as any,
+          ],
+        };
+      });
+      return { previousTable };
+    },
+    onError: (_err, _variables, context) => {
+      utils.table.getById.setData({ id: tableId }, context?.previousTable);
+    },
+    onSettled: () => {
+      invalidateAll();
+    },
   });
 
   const deleteColumn = api.table.deleteColumn.useMutation({
-    onSuccess: invalidateAll,
+    onMutate: async (variables) => {
+      await utils.table.getById.cancel({ id: tableId });
+      const previousTable = utils.table.getById.getData({ id: tableId });
+      utils.table.getById.setData({ id: tableId }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columns: old.columns.filter((col) => col.id !== variables.columnId),
+        };
+      });
+      return { previousTable };
+    },
+    onError: (_err, _variables, context) => {
+      utils.table.getById.setData({ id: tableId }, context?.previousTable);
+    },
+    onSettled: () => {
+      invalidateAll();
+    },
+  });
+
+  const renameColumn = api.table.renameColumn.useMutation({
+    onMutate: async (variables) => {
+      await utils.table.getById.cancel({ id: tableId });
+      const previousTable = utils.table.getById.getData({ id: tableId });
+      utils.table.getById.setData({ id: tableId }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columns: old.columns.map((col) =>
+            col.id === variables.columnId ? { ...col, columnName: variables.columnName } : col,
+          ),
+        };
+      });
+      return { previousTable };
+    },
+    onError: (_err, _variables, context) => {
+      utils.table.getById.setData({ id: tableId }, context?.previousTable);
+    },
+    onSettled: () => {
+      invalidateAll();
+    },
+    onSuccess: () => {
+      setRenamingColumnId(null);
+    },
   });
 
   const [showColumnForm, setShowColumnForm] = useState(false);
@@ -270,6 +500,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
     "TEXT" | "NUMBER" | "CHECKBOX" | "DATE"
   >("TEXT");
   const [columnMenuId, setColumnMenuId] = useState<string | null>(null);
+  const [renamingColumnId, setRenamingColumnId] = useState<string | null>(null);
   const [focusedCell, setFocusedCell] = useState<{
     row: number;
     col: number;
@@ -277,7 +508,11 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
 
   const parentRef = useRef<HTMLDivElement>(null);
 
-  const dbColumns = useMemo(() => table?.columns ?? [], [table?.columns]);
+  const allDbColumns = useMemo(() => table?.columns ?? [], [table?.columns]);
+  const dbColumns = useMemo(
+    () => allDbColumns.filter((col) => !hiddenFieldIds.includes(col.id)),
+    [allDbColumns, hiddenFieldIds],
+  );
   const totalRowCount = table?._count?.rows ?? 0;
 
   const allRows = useMemo(
@@ -285,7 +520,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
     [rowsData],
   );
 
-  const flatData: FlatRow[] = useMemo(() => {
+  const unsortedFlatData: FlatRow[] = useMemo(() => {
     type RowWithCells = { id: string; cells: { columnId: string; cellValue: string | null }[] };
     const rows = (allRows as RowWithCells[]).map((row) => {
       const flat: FlatRow = { _rowId: row.id };
@@ -326,6 +561,28 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
 
     return result;
   }, [allRows, groupByColumnId]);
+
+  const flatData = useMemo(() => {
+    if (!sortConfig) return unsortedFlatData;
+    const col = allDbColumns.find((c) => c.id === sortConfig.columnId);
+    if (!col) return unsortedFlatData;
+
+    return [...unsortedFlatData].sort((a, b) => {
+      // Keep group header rows in place
+      if (a._isGroupHeader || b._isGroupHeader) return 0;
+
+      const aVal = String(a[sortConfig.columnId] ?? "");
+      const bVal = String(b[sortConfig.columnId] ?? "");
+
+      let cmp: number;
+      if (col.fieldType === "NUMBER") {
+        cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
+      } else {
+        cmp = aVal.localeCompare(bVal, undefined, { sensitivity: "base" });
+      }
+      return sortConfig.direction === "asc" ? cmp : -cmp;
+    });
+  }, [unsortedFlatData, sortConfig, allDbColumns]);
 
   const navigateCell = useCallback(
     (direction: "up" | "down" | "left" | "right") => {
@@ -377,33 +634,48 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
       helper.accessor((row) => row[col.id] ?? "", {
         id: col.id,
         header: () => (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {FIELD_TYPE_ICONS[col.fieldType]}
-              <span className="truncate font-medium text-airtable-text-primary">
-                {col.columnName}
-              </span>
-            </div>
+          <div className="flex items-center justify-between group/header">
+            {renamingColumnId === col.id ? (
+              <ColumnRenameInput
+                initialValue={col.columnName}
+                onCommit={(name) => renameColumn.mutate({ columnId: col.id, columnName: name })}
+                onCancel={() => setRenamingColumnId(null)}
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                {FIELD_TYPE_ICONS[col.fieldType]}
+                <span className="truncate font-medium text-airtable-text-primary">
+                  {col.columnName}
+                </span>
+              </div>
+            )}
             <div className="relative">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setColumnMenuId(columnMenuId === col.id ? null : col.id);
                 }}
-                className="rounded p-0.5 opacity-0 hover:bg-gray-200 group-hover:opacity-100"
+                className="rounded p-0.5 opacity-0 hover:bg-gray-200 group-hover/header:opacity-100"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className="text-gray-400"
-                >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-gray-400">
                   <path d="M8 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
                 </svg>
               </button>
               {columnMenuId === col.id && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingColumnId(col.id);
+                      setColumnMenuId(null);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M11 2l3 3-8 8H3v-3L11 2z" />
+                    </svg>
+                    Rename field
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -412,14 +684,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
                     }}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
                   >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4" />
                     </svg>
                     Delete field
@@ -432,7 +697,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [] }: TableGridP
         cell: (info) => info.getValue(),
       }),
     );
-  }, [dbColumns, columnMenuId, deleteColumn]);
+  }, [dbColumns, columnMenuId, deleteColumn, renamingColumnId, renameColumn]);
 
   const reactTable = useReactTable({
     data: flatData,

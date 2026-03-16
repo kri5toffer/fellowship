@@ -1,6 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import {
+  ChevronDown,
+  Columns,
+  LayoutGrid,
+  Menu,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import { api } from "~/trpc/react";
 import type { FilterCondition } from "./filter-bar";
 
@@ -10,6 +21,21 @@ type ViewRecord = {
   filters: unknown;
   groupByColumnId: string | null;
 };
+
+/** Icon for view type - Kanban uses green columns, others use grid */
+function ViewIcon({
+  viewName,
+  className = "size-3.5 shrink-0",
+}: {
+  viewName: string;
+  className?: string;
+}) {
+  const isKanban = viewName.toLowerCase().includes("kanban");
+  if (isKanban) {
+    return <Columns className={className} style={{ color: "#20c933" }} />;
+  }
+  return <LayoutGrid className={`${className} text-airtable-text-secondary`} />;
+}
 
 export function ViewsSidebar({
   tableId,
@@ -37,10 +63,28 @@ export function ViewsSidebar({
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const [menuViewId, setMenuViewId] = useState<string | null>(null);
+  const [viewSearch, setViewSearch] = useState("");
 
   const createView = api.view.create.useMutation({
-    onSuccess: (view) => {
+    onMutate: async (variables) => {
+      await utils.view.getByTable.cancel({ tableId });
+      const previousViews = utils.view.getByTable.getData({ tableId });
+      const tempView: ViewRecord = {
+        id: `temp-${Date.now()}`,
+        viewName: variables.viewName,
+        filters: variables.filters,
+        groupByColumnId: variables.groupByColumnId ?? null,
+      };
+      utils.view.getByTable.setData({ tableId }, (old) => [...(old ?? []), tempView]);
+      return { previousViews };
+    },
+    onError: (_err, _variables, context) => {
+      utils.view.getByTable.setData({ tableId }, context?.previousViews);
+    },
+    onSettled: () => {
       void utils.view.getByTable.invalidate({ tableId });
+    },
+    onSuccess: (view) => {
       setShowSaveForm(false);
       setNewViewName("");
       onSelectView({
@@ -52,10 +96,23 @@ export function ViewsSidebar({
   });
 
   const deleteView = api.view.delete.useMutation({
-    onSuccess: () => {
+    onMutate: async (variables) => {
+      await utils.view.getByTable.cancel({ tableId });
+      const previousViews = utils.view.getByTable.getData({ tableId });
+      utils.view.getByTable.setData({ tableId }, (old) =>
+        (old ?? []).filter((v) => v.id !== variables.id),
+      );
+      return { previousViews };
+    },
+    onError: (_err, _variables, context) => {
+      utils.view.getByTable.setData({ tableId }, context?.previousViews);
+    },
+    onSettled: () => {
       void utils.view.getByTable.invalidate({ tableId });
+    },
+    onSuccess: (_data, variables) => {
       setMenuViewId(null);
-      if (activeViewId === menuViewId) {
+      if (activeViewId === variables.id) {
         onSelectView({ id: null, filters: [], groupByColumnId: null });
       }
     },
@@ -72,128 +129,71 @@ export function ViewsSidebar({
     });
   };
 
+  const filteredViews = views.filter((v) =>
+    v.viewName.toLowerCase().includes(viewSearch.toLowerCase())
+  );
+
   if (!tableId) return null;
 
   return (
-    <div className="flex w-52 shrink-0 flex-col border-r border-airtable-border bg-airtable-sidebar-bg">
-      <div className="border-b border-airtable-border px-3 py-2">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-airtable-text-muted">
-          Views
-        </h3>
+    <div className="flex w-52 shrink-0 flex-col border-r border-airtable-border bg-white">
+      {/* Grid view header - hamburger, grid icon, "Grid view", chevron */}
+      <div className="flex items-center gap-2 border-b border-airtable-border px-3 py-2.5">
+        <button
+          type="button"
+          className="rounded p-1 text-airtable-text-muted hover:bg-gray-100 hover:text-airtable-text-primary"
+          title="Menu"
+        >
+          <Menu className="size-4" />
+        </button>
+        <LayoutGrid className="size-4 shrink-0 text-airtable-text-secondary" />
+        <span className="flex-1 text-[13px] font-medium text-airtable-text-primary">
+          Grid view
+        </span>
+        <button
+          type="button"
+          className="rounded p-0.5 text-airtable-text-muted hover:bg-gray-100"
+        >
+          <ChevronDown className="size-4" />
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-1">
-        {/* All records (default) */}
+      {/* Create new... button */}
+      <div className="border-b border-airtable-border px-3 py-2">
         <button
-          onClick={() =>
-            onSelectView({ id: null, filters: [], groupByColumnId: null })
-          }
-          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] ${
-            activeViewId === null
-              ? "bg-airtable-blue/10 font-medium text-airtable-blue"
-              : "text-airtable-text-primary hover:bg-airtable-row-hover"
-          }`}
+          onClick={() => setShowSaveForm(true)}
+          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-airtable-row-hover"
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            className="shrink-0"
-          >
-            <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v1h14V2a1 1 0 0 0-1-1H2zM1 5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V5H1z" />
-          </svg>
-          All records
+          <Plus className="size-4 shrink-0 text-airtable-text-secondary" />
+          Create new...
         </button>
+      </div>
 
-        {isLoading ? (
-          <div className="px-3 py-2 text-[12px] text-airtable-text-muted">
-            Loading views...
-          </div>
-        ) : (
-          views.map((view: ViewRecord) => (
-            <div
-              key={view.id}
-              className="group relative flex items-center"
-              onClick={() => setMenuViewId(null)}
-            >
-              <button
-                onClick={() =>
-                  onSelectView({
-                    id: view.id,
-                    filters: (view.filters as FilterCondition[]) ?? [],
-                    groupByColumnId: view.groupByColumnId,
-                  })
-                }
-                className={`flex flex-1 items-center gap-2 px-3 py-1.5 text-left text-[13px] ${
-                  activeViewId === view.id
-                    ? "bg-airtable-blue/10 font-medium text-airtable-blue"
-                    : "text-airtable-text-primary hover:bg-airtable-row-hover"
-                }`}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className="shrink-0"
-                >
-                  <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v1h14V2a1 1 0 0 0-1-1H2zM1 5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V5H1z" />
-                </svg>
-                <span className="min-w-0 truncate">{view.viewName}</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuViewId(menuViewId === view.id ? null : view.id);
-                }}
-                className="rounded p-0.5 opacity-70 hover:opacity-100 hover:bg-gray-200"
-                title="View options"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className="text-gray-400"
-                >
-                  <path d="M8 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
-                </svg>
-              </button>
-              {menuViewId === view.id && (
-                <div
-                  className="absolute left-full top-0 z-20 ml-1 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => {
-                      deleteView.mutate({ id: view.id });
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4" />
-                    </svg>
-                    Delete view
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-
-        {showSaveForm ? (
-          <form
-            className="px-2 py-1"
-            onSubmit={handleSaveNewView}
+      {/* Find a view search bar */}
+      <div className="border-b border-airtable-border px-2 py-2">
+        <div className="flex items-center gap-2 rounded-md border border-airtable-border bg-white px-2.5 py-1.5">
+          <Search className="size-3.5 shrink-0 text-airtable-text-muted" />
+          <input
+            type="text"
+            placeholder="Find a view"
+            value={viewSearch}
+            onChange={(e) => setViewSearch(e.target.value)}
+            className="flex-1 bg-transparent text-[13px] text-airtable-text-primary outline-none placeholder:text-airtable-text-muted"
+          />
+          <button
+            type="button"
+            className="rounded p-0.5 text-airtable-text-muted hover:bg-gray-100"
+            title="View options"
           >
+            <Settings className="size-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* View list */}
+      <div className="flex-1 overflow-y-auto py-1">
+        {showSaveForm ? (
+          <form className="px-2 py-1" onSubmit={handleSaveNewView}>
             <input
               autoFocus
               type="text"
@@ -229,23 +229,80 @@ export function ViewsSidebar({
             </div>
           </form>
         ) : (
-          <button
-            onClick={() => setShowSaveForm(true)}
-            className="mx-2 mt-1 flex items-center gap-2 rounded px-2 py-1.5 text-[13px] text-airtable-text-muted hover:bg-airtable-row-hover hover:text-airtable-blue"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+          <>
+            {/* Grid view (default / All records) */}
+            <button
+              onClick={() =>
+                onSelectView({ id: null, filters: [], groupByColumnId: null })
+              }
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] ${
+                activeViewId === null
+                  ? "bg-gray-100 font-medium text-airtable-text-primary"
+                  : "text-airtable-text-primary hover:bg-airtable-row-hover"
+              }`}
             >
-              <line x1="8" y1="3" x2="8" y2="13" />
-              <line x1="3" y1="8" x2="13" y2="8" />
-            </svg>
-            New view
-          </button>
+              <LayoutGrid className="size-3.5 shrink-0 text-airtable-text-secondary" />
+              Grid view
+            </button>
+
+            {isLoading ? (
+              <div className="px-3 py-2 text-[12px] text-airtable-text-muted">
+                Loading views...
+              </div>
+            ) : (
+              filteredViews.map((view: ViewRecord) => (
+                <div
+                  key={view.id}
+                  className="group relative flex items-center"
+                  onClick={() => setMenuViewId(null)}
+                >
+                  <button
+                    onClick={() =>
+                      onSelectView({
+                        id: view.id,
+                        filters: (view.filters as FilterCondition[]) ?? [],
+                        groupByColumnId: view.groupByColumnId,
+                      })
+                    }
+                    className={`flex flex-1 items-center gap-2 px-3 py-1.5 text-left text-[13px] ${
+                      activeViewId === view.id
+                        ? "bg-gray-100 font-medium text-airtable-text-primary"
+                        : "text-airtable-text-primary hover:bg-airtable-row-hover"
+                    }`}
+                  >
+                    <ViewIcon viewName={view.viewName} />
+                    <span className="min-w-0 truncate">{view.viewName}</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuViewId(menuViewId === view.id ? null : view.id);
+                    }}
+                    className="rounded p-0.5 opacity-70 hover:opacity-100 hover:bg-gray-200"
+                    title="View options"
+                  >
+                    <MoreHorizontal className="size-3 text-gray-400" />
+                  </button>
+                  {menuViewId === view.id && (
+                    <div
+                      className="absolute left-full top-0 z-20 ml-1 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => {
+                          deleteView.mutate({ id: view.id });
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="size-3.5" />
+                        Delete view
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
 
