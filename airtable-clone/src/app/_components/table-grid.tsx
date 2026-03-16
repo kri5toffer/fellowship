@@ -351,11 +351,22 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       };
       await utils.table.getRows.cancel({ tableId });
       const previousRows = utils.table.getRows.getInfiniteData(queryInput);
+      const now = new Date();
+      const tempId = `temp-${Date.now()}`;
       const tempRow = {
-        id: `temp-${Date.now()}`,
+        id: tempId,
+        tableId,
+        displayOrder: 0,
+        createdById: null as string | null,
+        createdAt: now,
+        updatedAt: now,
         cells: (table?.columns ?? []).map((col) => ({
+          id: `temp-cell-${col.id}`,
           columnId: col.id,
-          cellValue: null,
+          rowId: tempId,
+          cellValue: null as string | null,
+          createdAt: now,
+          updatedAt: now,
         })),
       };
       utils.table.getRows.setInfiniteData(queryInput, (old) => {

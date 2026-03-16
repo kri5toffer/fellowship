@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Boxes, Plus, Settings } from "lucide-react";
+import { Plus, Home, Star, Share2, Users, BookOpen, ShoppingBag, Upload, ChevronDown, ChevronRight, Menu } from "lucide-react";
 import { api } from "~/trpc/react";
 
 const BASE_COLORS = [
@@ -25,6 +25,7 @@ export function BasesPage() {
   const [selectedColor, setSelectedColor] = useState(BASE_COLORS[0]!);
   const [renamingBaseId, setRenamingBaseId] = useState<string | null>(null);
   const [renameBaseValue, setRenameBaseValue] = useState("");
+  const [starredOpen, setStarredOpen] = useState(true);
 
   const createBase = api.base.create.useMutation({
     onMutate: async (variables) => {
@@ -87,168 +88,242 @@ export function BasesPage() {
   const baseList = bases ?? [];
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Left sidebar - Airtable style */}
-      <aside className="flex w-12 shrink-0 flex-col items-center border-r border-airtable-border bg-airtable-sidebar-bg py-3">
-        <Link
-          href="/"
-          title="All bases"
-          className="inline-flex size-8 items-center justify-center rounded-lg text-airtable-text-secondary transition-colors hover:bg-gray-200 hover:text-airtable-text-primary"
-        >
-          <Boxes className="size-5 text-airtable-text-primary" />
-        </Link>
-        <button
-          type="button"
-          className="mt-2 inline-flex size-8 items-center justify-center rounded-lg text-airtable-text-muted transition-colors hover:bg-gray-200 hover:text-airtable-text-secondary"
-          title="Settings"
-        >
-          <Settings className="size-5" />
-        </button>
+    <div className="flex min-h-screen bg-white">
+      {/* Sidebar */}
+      <aside className="flex w-[260px] shrink-0 flex-col border-r border-gray-200 bg-white">
+        {/* Sidebar header */}
+        <div className="flex h-[60px] items-center gap-3 px-4 border-b border-gray-200">
+          <button type="button" className="flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:bg-gray-100">
+            <Menu className="size-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            {/* Airtable-style logo mark */}
+            <svg width="24" height="20" viewBox="0 0 200 170" fill="none">
+              <rect x="10" y="70" width="80" height="90" rx="8" fill="#FCB400"/>
+              <rect x="110" y="70" width="80" height="90" rx="8" fill="#18BFFF"/>
+              <rect x="10" y="10" width="180" height="50" rx="8" fill="#F82B60"/>
+            </svg>
+            <span className="text-[17px] font-semibold text-gray-900 tracking-tight">Airtable</span>
+          </div>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 overflow-y-auto py-2">
+          {/* Home */}
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg mx-2 px-3 py-2.5 text-[15px] font-medium text-gray-800 bg-gray-100 hover:bg-gray-100"
+            style={{ width: "calc(100% - 16px)" }}
+          >
+            <Home className="size-[18px] shrink-0 text-gray-600" />
+            Home
+          </button>
+
+          {/* Starred */}
+          <div className="mx-2 mt-0.5" style={{ width: "calc(100% - 16px)" }}>
+            <button
+              type="button"
+              onClick={() => setStarredOpen(!starredOpen)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] font-medium text-gray-800 hover:bg-gray-100"
+            >
+              <Star className="size-[18px] shrink-0 text-gray-600" />
+              <span className="flex-1 text-left">Starred</span>
+              <ChevronDown className={`size-4 text-gray-400 transition-transform ${starredOpen ? "" : "-rotate-90"}`} />
+            </button>
+            {starredOpen && (
+              <div className="mx-3 mb-1 flex items-start gap-3 rounded-lg border border-gray-200 px-3 py-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded border border-gray-200">
+                  <Star className="size-4 text-gray-400" />
+                </div>
+                <p className="text-[13px] leading-snug text-gray-500">
+                  Your starred bases, interfaces, and workspaces will appear here
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Shared */}
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg mx-2 px-3 py-2.5 text-[15px] font-medium text-gray-800 hover:bg-gray-100"
+            style={{ width: "calc(100% - 16px)" }}
+          >
+            <Share2 className="size-[18px] shrink-0 text-gray-600" />
+            Shared
+          </button>
+
+          {/* Workspaces */}
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg mx-2 px-3 py-2.5 text-[15px] font-medium text-gray-800 hover:bg-gray-100"
+            style={{ width: "calc(100% - 16px)" }}
+          >
+            <Users className="size-[18px] shrink-0 text-gray-600" />
+            <span className="flex-1 text-left">Workspaces</span>
+            <div className="flex items-center gap-1">
+              <Plus className="size-4 text-gray-400" />
+              <ChevronRight className="size-4 text-gray-400" />
+            </div>
+          </button>
+        </nav>
+
+        {/* Bottom section */}
+        <div className="border-t border-gray-200 py-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg mx-2 px-3 py-2.5 text-[15px] font-medium text-gray-700 hover:bg-gray-100"
+            style={{ width: "calc(100% - 16px)" }}
+          >
+            <BookOpen className="size-[18px] shrink-0 text-gray-500" />
+            Templates and apps
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg mx-2 px-3 py-2.5 text-[15px] font-medium text-gray-700 hover:bg-gray-100"
+            style={{ width: "calc(100% - 16px)" }}
+          >
+            <ShoppingBag className="size-[18px] shrink-0 text-gray-500" />
+            Marketplace
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg mx-2 px-3 py-2.5 text-[15px] font-medium text-gray-700 hover:bg-gray-100"
+            style={{ width: "calc(100% - 16px)" }}
+          >
+            <Upload className="size-[18px] shrink-0 text-gray-500" />
+            Import
+          </button>
+
+          {/* Create button */}
+          <div className="px-3 pt-2 pb-1">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-airtable-blue py-3 text-[15px] font-semibold text-white hover:bg-airtable-blue/90 transition-colors"
+            >
+              <Plus className="size-5" />
+              Create
+            </button>
+          </div>
+        </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-airtable-blue">
-              <Boxes className="size-5 text-white" />
-            </div>
-            <span className="text-xl font-semibold text-gray-900">Airtable Clone</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main content */}
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">My Bases</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Create and manage your databases
-          </p>
-        </div>
+      <div className="flex min-w-0 flex-1 flex-col bg-gray-50">
+        <main className="mx-auto w-full max-w-6xl px-8 py-8">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">Home</h1>
+          </div>
 
-        {isLoading ? (
-          <div className="py-12 text-center text-gray-500">Loading bases...</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {/* Create new base card */}
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="group flex h-[140px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white transition-all hover:border-airtable-blue hover:bg-blue-50"
-            >
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors group-hover:bg-airtable-blue group-hover:text-white">
-                <Plus className="size-6" />
-              </div>
-              <span className="text-sm font-medium text-gray-600 group-hover:text-airtable-blue">
-                Create new base
-              </span>
-            </button>
-
-            {/* Existing bases */}
-            {baseList.map((base) => (
-              <div
-                key={base.id}
-                className="group relative flex h-[140px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md"
-              >
-                {/* Colored header */}
+          {isLoading ? (
+            <div className="py-12 text-center text-gray-500">Loading bases...</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {/* Existing bases */}
+              {baseList.map((base) => (
                 <div
-                  className="h-16 shrink-0"
-                  style={{ backgroundColor: base.color }}
-                />
-                
-                {renamingBaseId === base.id ? (
-                  <div className="flex flex-1 items-center gap-3 px-4">
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
-                      style={{ backgroundColor: base.color }}
+                  key={base.id}
+                  className="group relative flex h-[140px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md"
+                >
+                  {/* Colored header */}
+                  <div
+                    className="h-16 shrink-0"
+                    style={{ backgroundColor: base.color }}
+                  />
+
+                  {renamingBaseId === base.id ? (
+                    <div className="flex flex-1 items-center gap-3 px-4">
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
+                        style={{ backgroundColor: base.color }}
+                      >
+                        {renameBaseValue.charAt(0).toUpperCase() || base.baseName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <input
+                          autoFocus
+                          value={renameBaseValue}
+                          onChange={(e) => setRenameBaseValue(e.target.value)}
+                          onBlur={() => {
+                            if (renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
+                            else { setRenamingBaseId(null); setRenameBaseValue(""); }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
+                            if (e.key === "Escape") { setRenamingBaseId(null); setRenameBaseValue(""); }
+                          }}
+                          className="w-full truncate rounded border border-airtable-blue px-1 py-0.5 text-sm font-semibold text-gray-900 outline-none"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/base/${base.id}`}
+                      className="flex flex-1 items-center gap-3 px-4"
                     >
-                      {renameBaseValue.charAt(0).toUpperCase() || base.baseName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <input
-                        autoFocus
-                        value={renameBaseValue}
-                        onChange={(e) => setRenameBaseValue(e.target.value)}
-                        onBlur={() => {
-                          if (renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
-                          else { setRenamingBaseId(null); setRenameBaseValue(""); }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
-                          if (e.key === "Escape") { setRenamingBaseId(null); setRenameBaseValue(""); }
-                        }}
-                        className="w-full truncate rounded border border-airtable-blue px-1 py-0.5 text-sm font-semibold text-gray-900 outline-none"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <Link
-                    href={`/base/${base.id}`}
-                    className="flex flex-1 items-center gap-3 px-4"
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
+                        style={{ backgroundColor: base.color }}
+                      >
+                        {base.baseName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-semibold text-gray-900">
+                          {base.baseName}
+                        </h3>
+                        {base.description && (
+                          <p className="truncate text-xs text-gray-500">
+                            {base.description}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  )}
+
+                  {/* Rename button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setRenamingBaseId(base.id);
+                      setRenameBaseValue(base.baseName);
+                    }}
+                    className="absolute right-9 top-2 rounded-md bg-black/20 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100"
+                    title="Rename base"
                   >
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm"
-                      style={{ backgroundColor: base.color }}
-                    >
-                      {base.baseName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold text-gray-900">
-                        {base.baseName}
-                      </h3>
-                      {base.description && (
-                        <p className="truncate text-xs text-gray-500">
-                          {base.description}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                )}
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M11 2l3 3-8 8H3v-3L11 2z"/>
+                    </svg>
+                  </button>
 
-                {/* Rename button */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setRenamingBaseId(base.id);
-                    setRenameBaseValue(base.baseName);
-                  }}
-                  className="absolute right-9 top-2 rounded-md bg-black/20 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100"
-                  title="Rename base"
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M11 2l3 3-8 8H3v-3L11 2z"/>
-                  </svg>
-                </button>
-
-                {/* Delete button */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    deleteBase.mutate({ id: base.id });
-                  }}
-                  className="absolute right-2 top-2 rounded-md bg-black/20 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100"
-                  title="Delete base"
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4"/>
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!isLoading && baseList.length === 0 && (
-          <div className="mt-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-              <Boxes className="size-8 text-gray-400" />
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      deleteBase.mutate({ id: base.id });
+                    }}
+                    className="absolute right-2 top-2 rounded-md bg-black/20 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100"
+                    title="Delete base"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
-            <h3 className="text-lg font-medium text-gray-900">No bases yet</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by creating your first base</p>
-          </div>
-        )}
-      </main>
+          )}
+
+          {!isLoading && baseList.length === 0 && (
+            <div className="mt-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+                <Users className="size-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900">No bases yet</h3>
+              <p className="mt-1 text-sm text-gray-500">Click Create to get started</p>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Create base modal */}
       {showCreateModal && (
@@ -256,7 +331,7 @@ export function BasesPage() {
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-gray-900">Create a new base</h2>
             <p className="mt-1 text-sm text-gray-500">Give your base a name, optional description, and pick a color</p>
-            
+
             <form
               className="mt-6"
               onSubmit={(e) => {
@@ -341,7 +416,6 @@ export function BasesPage() {
           </div>
         </div>
       )}
-      </div>
     </div>
   );
 }
