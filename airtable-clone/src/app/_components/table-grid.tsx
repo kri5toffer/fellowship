@@ -295,8 +295,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
           ...old,
           pages: old.pages.map((page) => ({
             ...page,
-            rows: page.rows.map(
-              (row: { id: string; cells: { columnId: string; cellValue: string | null }[] }) =>
+            rows: page.rows.map((row) =>
                 row.id === variables.rowId
                   ? {
                       ...row,
