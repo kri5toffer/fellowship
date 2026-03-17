@@ -117,8 +117,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
       const previousTables = utils.table.getAll.getData({ baseId });
       utils.table.getAll.setData({ baseId }, (old) => [
         ...(old ?? []),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { id: `temp-${Date.now()}`, tableName: variables.tableName, baseId: variables.baseId } as any,
+        { id: `temp-${Date.now()}`, tableName: variables.tableName, baseId: variables.baseId } as unknown as NonNullable<typeof previousTables>[number],
       ]);
       return { previousTables };
     },
@@ -479,7 +478,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                           onClick={() => {
                             setSortConfig(
                               isActive
-                                ? { columnId: col.id, direction: sortConfig!.direction === "asc" ? "desc" : "asc" }
+                                ? { columnId: col.id, direction: sortConfig.direction === "asc" ? "desc" : "asc" }
                                 : { columnId: col.id, direction: "asc" },
                             );
                           }}

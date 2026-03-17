@@ -23,8 +23,7 @@ export function BaseSelector({
       const previousBases = utils.base.getAll.getData();
       utils.base.getAll.setData(undefined, (old) => [
         ...(old ?? []),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { id: `temp-${Date.now()}`, baseName: variables.baseName, color: "#2d7ff9", description: null } as any,
+        { id: `temp-${Date.now()}`, baseName: variables.baseName, color: "#2d7ff9", description: null } as unknown as NonNullable<typeof previousBases>[number],
       ]);
       return { previousBases };
     },

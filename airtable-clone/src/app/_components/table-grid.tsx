@@ -448,8 +448,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
           ...old,
           columns: [
             ...old.columns,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            { id: `temp-${Date.now()}`, columnName: variables.columnName, fieldType: variables.fieldType, tableId } as any,
+            { id: `temp-${Date.now()}`, columnName: variables.columnName, fieldType: variables.fieldType, tableId } as unknown as NonNullable<typeof previousTable>["columns"][number],
           ],
         };
       });
