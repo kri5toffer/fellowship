@@ -491,7 +491,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                           <span className="flex-1 truncate">{col.columnName}</span>
                           {isActive && (
                             <span className="shrink-0 text-[11px] font-medium text-orange-600">
-                              {sortConfig!.direction === "asc" ? (isNumber ? "1→9" : "A→Z") : (isNumber ? "9→1" : "Z→A")}
+                              {sortConfig.direction === "asc" ? (isNumber ? "1→9" : "A→Z") : (isNumber ? "9→1" : "Z→A")}
                             </span>
                           )}
                         </button>

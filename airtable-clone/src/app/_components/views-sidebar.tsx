@@ -20,6 +20,10 @@ type ViewRecord = {
   viewName: string;
   filters: unknown;
   groupByColumnId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  displayOrder: number;
+  tableId: string;
 };
 
 /** Icon for view type - Kanban uses green columns, others use grid */
@@ -69,11 +73,16 @@ export function ViewsSidebar({
     onMutate: async (variables) => {
       await utils.view.getByTable.cancel({ tableId });
       const previousViews = utils.view.getByTable.getData({ tableId });
+      const now = new Date();
       const tempView: ViewRecord = {
         id: `temp-${Date.now()}`,
         viewName: variables.viewName,
         filters: variables.filters,
         groupByColumnId: variables.groupByColumnId ?? null,
+        createdAt: now,
+        updatedAt: now,
+        displayOrder: 0,
+        tableId,
       };
       utils.view.getByTable.setData({ tableId }, (old) => [...(old ?? []), tempView]);
       return { previousViews };

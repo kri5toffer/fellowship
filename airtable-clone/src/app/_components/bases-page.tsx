@@ -3,7 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Plus, Home, Star, Share2, Users, BookOpen, ShoppingBag, Upload, ChevronDown, ChevronRight, Menu } from "lucide-react";
-import { api } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
+
+type BaseItem = RouterOutputs["base"]["getAll"][number];
 
 const BASE_COLORS = [
   "#1d7c6a",
@@ -31,11 +33,19 @@ export function BasesPage() {
     onMutate: async (variables) => {
       await utils.base.getAll.cancel();
       const previousBases = utils.base.getAll.getData();
-      utils.base.getAll.setData(undefined, (old) => [
-        ...(old ?? []),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { id: `temp-${Date.now()}`, baseName: variables.baseName, color: variables.color ?? "#2d7ff9", description: variables.description ?? null } as any,
-      ]);
+      utils.base.getAll.setData(undefined, (old) => {
+        const tempBase: BaseItem = {
+          id: `temp-${Date.now()}`,
+          baseName: variables.baseName,
+          color: variables.color ?? "#2d7ff9",
+          description: variables.description ?? null,
+          displayOrder: (old?.length ?? 0) * 1000,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          createdById: null,
+        };
+        return [...(old ?? []), tempBase];
+      });
       return { previousBases };
     },
     onError: (_err, _variables, context) => {

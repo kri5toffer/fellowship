@@ -336,6 +336,12 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
     },
   });
 
+  const addBulkRows = api.table.addBulkRows.useMutation({
+    onSuccess: () => {
+      invalidateAll();
+    },
+  });
+
   const addRow = api.table.createRow.useMutation({
     onMutate: async () => {
       const queryInput = {
@@ -767,9 +773,18 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       className="flex min-h-0 flex-1 flex-col"
       onClick={() => setColumnMenuId(null)}
     >
-      <div className="shrink-0 border-b border-airtable-border bg-gray-50/50 px-4 py-1 text-[12px] text-airtable-text-muted">
-        {allRows.length.toLocaleString()} of {totalRowCount.toLocaleString()} rows loaded
-        {isFetchingNextPage && " · Loading more..."}
+      <div className="flex shrink-0 items-center justify-between border-b border-airtable-border bg-gray-50/50 px-4 py-1">
+        <span className="text-[12px] text-airtable-text-muted">
+          {allRows.length.toLocaleString()} of {totalRowCount.toLocaleString()} rows loaded
+          {isFetchingNextPage && " · Loading more..."}
+        </span>
+        <button
+          onClick={() => addBulkRows.mutate({ tableId: table.id, count: 100_000 })}
+          disabled={addBulkRows.isPending}
+          className="rounded-md bg-airtable-blue px-3 py-1 text-[12px] font-medium text-white hover:bg-airtable-blue/90 disabled:opacity-60"
+        >
+          {addBulkRows.isPending ? "Adding rows…" : "+ 100k rows"}
+        </button>
       </div>
 
       <div
