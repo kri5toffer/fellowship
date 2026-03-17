@@ -14,11 +14,12 @@ import {
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import type { FilterCondition } from "./filter-bar";
+import type { Prisma } from "../../../generated/prisma";
 
 type ViewRecord = {
   id: string;
   viewName: string;
-  filters: unknown;
+  filters: Prisma.JsonValue;
   groupByColumnId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -77,7 +78,7 @@ export function ViewsSidebar({
       const tempView: ViewRecord = {
         id: `temp-${Date.now()}`,
         viewName: variables.viewName,
-        filters: variables.filters,
+        filters: variables.filters as unknown as Prisma.JsonValue,
         groupByColumnId: variables.groupByColumnId ?? null,
         createdAt: now,
         updatedAt: now,
