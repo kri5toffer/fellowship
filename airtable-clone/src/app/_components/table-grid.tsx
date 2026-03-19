@@ -10,8 +10,13 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { api } from "~/trpc/react";
+import { type FieldType } from "../../../generated/prisma";
+import { type FilterGroup, createEmptyFilterGroup } from "./filter-bar";
 
 const ROW_HEIGHT = 32;
+const ROW_NUM_WIDTH = 36; // Width of the row-number/checkbox gutter
+const DEFAULT_COL_WIDTH = 180;
+const MIN_COL_WIDTH = 60;
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   TEXT: (
@@ -28,11 +33,6 @@ const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-purple-500">
       <rect x="2" y="2" width="12" height="12" rx="2" />
       <path d="M4.5 8l2.5 2.5 4.5-4.5" />
-    </svg>
-  ),
-  DATE: (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-cyan-600">
-      <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z"/>
     </svg>
   ),
 };
@@ -60,8 +60,8 @@ function CellInput({
   const cellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setDraft(cellValue);
-  }, [cellValue]);
+    if (!editing) setDraft(cellValue);
+  }, [cellValue, editing]);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
@@ -158,9 +158,7 @@ function CellInput({
         onFocus={onFocus}
         onKeyDown={handleKeyDown}
       >
-        {fieldType === "DATE" && cellValue
-          ? new Date(cellValue).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-          : cellValue || ""}
+        {cellValue || ""}
       </div>
     );
   }
@@ -168,7 +166,7 @@ function CellInput({
   return (
     <input
       ref={inputRef}
-      type={fieldType === "DATE" ? "date" : fieldType === "NUMBER" ? "number" : "text"}
+      type={fieldType === "NUMBER" ? "number" : "text"}
       className="h-full w-full border-2 border-airtable-blue bg-white px-2 text-[13px] text-airtable-text-primary outline-none"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -227,13 +225,14 @@ type FlatRow = {
 interface TableGridProps {
   tableId: string;
   groupByColumnId?: string | null;
-  filters?: { id: string; columnId: string; operator: string; value: string }[];
+  filterGroup?: FilterGroup;
   searchQuery?: string;
   hiddenFieldIds?: string[];
   sortConfig?: { columnId: string; direction: "asc" | "desc" } | null;
+  onAddingRowChange?: (isPending: boolean) => void;
 }
 
-export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery = "", hiddenFieldIds = [], sortConfig = null }: TableGridProps) {
+export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery = "", hiddenFieldIds = [], sortConfig = null, onAddingRowChange }: TableGridProps) {
   const utils = api.useUtils();
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
@@ -256,12 +255,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
     {
       tableId,
       limit: 100,
-      filters: filters.map(({ id, columnId, operator, value }) => ({
-        id,
-        columnId,
-        operator,
-        value,
-      })),
+      filterGroup: filterGroup ?? createEmptyFilterGroup(),
       search: debouncedSearch,
     },
     { getNextPageParam: (lastPage) => lastPage.nextCursor },
@@ -279,12 +273,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       const queryInput = {
         tableId,
         limit: 100,
-        filters: filters.map(({ id, columnId, operator, value }) => ({
-          id,
-          columnId,
-          operator,
-          value,
-        })),
+        filterGroup: filterGroup ?? createEmptyFilterGroup(),
         search: debouncedSearch,
       };
       await utils.table.getRows.cancel({ tableId });
@@ -332,7 +321,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       }
     },
     onSettled: () => {
-      invalidateAll();
+      void utils.table.getRows.invalidate({ tableId });
     },
   });
 
@@ -347,12 +336,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       const queryInput = {
         tableId,
         limit: 100,
-        filters: filters.map(({ id, columnId, operator, value }) => ({
-          id,
-          columnId,
-          operator,
-          value,
-        })),
+        filterGroup: filterGroup ?? createEmptyFilterGroup(),
         search: debouncedSearch,
       };
       await utils.table.getRows.cancel({ tableId });
@@ -389,6 +373,22 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       });
       return { previousRows, queryInput };
     },
+    onSuccess: (newRow, _variables, context) => {
+      if (!context) return;
+      // Replace the temp row with the real row so subsequent cell edits use the real rowId
+      utils.table.getRows.setInfiniteData(context.queryInput, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            rows: page.rows.map((row) =>
+              row.id.startsWith("temp-") ? newRow : row,
+            ),
+          })),
+        };
+      });
+    },
     onError: (_err, _variables, context) => {
       if (context?.previousRows !== undefined) {
         utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
@@ -399,17 +399,16 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
     },
   });
 
+  useEffect(() => {
+    onAddingRowChange?.(addRow.isPending);
+  }, [addRow.isPending, onAddingRowChange]);
+
   const deleteRow = api.table.deleteRow.useMutation({
     onMutate: async (variables) => {
       const queryInput = {
         tableId,
         limit: 100,
-        filters: filters.map(({ id, columnId, operator, value }) => ({
-          id,
-          columnId,
-          operator,
-          value,
-        })),
+        filterGroup: filterGroup ?? createEmptyFilterGroup(),
         search: debouncedSearch,
       };
       await utils.table.getRows.cancel({ tableId });
@@ -442,13 +441,23 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
     onMutate: async (variables) => {
       await utils.table.getById.cancel({ id: tableId });
       const previousTable = utils.table.getById.getData({ id: tableId });
+      const now = new Date();
       utils.table.getById.setData({ id: tableId }, (old) => {
         if (!old) return old;
         return {
           ...old,
           columns: [
             ...old.columns,
-            { id: `temp-${Date.now()}`, columnName: variables.columnName, fieldType: variables.fieldType, tableId } as unknown as NonNullable<typeof previousTable>["columns"][number],
+            {
+              id: `temp-${Date.now()}`,
+              columnName: variables.columnName,
+              fieldType: variables.fieldType as FieldType,
+              tableId,
+              createdAt: now,
+              updatedAt: now,
+              displayOrder: old.columns.length,
+              createdById: null,
+            },
           ],
         };
       });
@@ -512,7 +521,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
   const [showColumnForm, setShowColumnForm] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newFieldType, setNewFieldType] = useState<
-    "TEXT" | "NUMBER" | "CHECKBOX" | "DATE"
+    "TEXT" | "NUMBER" | "CHECKBOX"
   >("TEXT");
   const [columnMenuId, setColumnMenuId] = useState<string | null>(null);
   const [renamingColumnId, setRenamingColumnId] = useState<string | null>(null);
@@ -522,6 +531,52 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
   } | null>(null);
 
   const parentRef = useRef<HTMLDivElement>(null);
+
+  // Column widths (resizable)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const resizingRef = useRef<{ colId: string; startX: number; startW: number } | null>(null);
+
+  const getColWidth = useCallback(
+    (colId: string) => columnWidths[colId] ?? DEFAULT_COL_WIDTH,
+    [columnWidths],
+  );
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const { colId, startX, startW } = resizingRef.current;
+      const newW = Math.max(MIN_COL_WIDTH, startW + (e.clientX - startX));
+      setColumnWidths((prev) => ({ ...prev, [colId]: newW }));
+    };
+    const onMouseUp = () => {
+      if (resizingRef.current) {
+        resizingRef.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  const startResize = useCallback(
+    (colId: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizingRef.current = {
+        colId,
+        startX: e.clientX,
+        startW: getColWidth(colId),
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [getColWidth],
+  );
 
   const allDbColumns = useMemo(() => table?.columns ?? [], [table?.columns]);
   const dbColumns = useMemo(
@@ -659,7 +714,7 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
             ) : (
               <div className="flex items-center gap-2">
                 {FIELD_TYPE_ICONS[col.fieldType]}
-                <span className="truncate font-medium text-airtable-text-primary">
+                <span className="truncate font-semibold text-airtable-text-primary">
                   {col.columnName}
                 </span>
               </div>
@@ -772,47 +827,62 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
       className="flex min-h-0 flex-1 flex-col"
       onClick={() => setColumnMenuId(null)}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-airtable-border bg-gray-50/50 px-4 py-1">
-        <span className="text-[12px] text-airtable-text-muted">
-          {allRows.length.toLocaleString()} of {totalRowCount.toLocaleString()} rows loaded
-          {isFetchingNextPage && " · Loading more..."}
-        </span>
-        <button
-          onClick={() => addBulkRows.mutate({ tableId: table.id, count: 100_000 })}
-          disabled={addBulkRows.isPending}
-          className="rounded-md bg-airtable-blue px-3 py-1 text-[12px] font-medium text-white hover:bg-airtable-blue/90 disabled:opacity-60"
-        >
-          {addBulkRows.isPending ? "Adding rows…" : "+ 100k rows"}
-        </button>
-      </div>
-
       <div
         ref={parentRef}
         className="min-h-0 flex-1 overflow-auto"
       >
-        <div>
+        <div className="flex min-h-full flex-col">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10">
             {reactTable.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                <th className="w-[70px] min-w-[70px] border-b border-r border-airtable-border bg-airtable-header-bg px-2 py-2 text-center text-[11px] text-gray-400">
-                  #
+                {/* Row-number gutter header (checkbox) */}
+                <th
+                  className="sticky left-0 z-[3] border-b border-r border-airtable-border bg-white p-0"
+                  style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
+                >
+                  <div className="flex h-full items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-[#d0d5dd]">
+                      <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  </div>
                 </th>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="group min-w-[180px] border-b border-r border-airtable-border bg-airtable-header-bg px-3 py-2 text-left text-[13px]"
-                  >
-                    {flexRender(
-                      header.column.columnDef.header,
-                      header.getContext(),
-                    )}
-                  </th>
-                ))}
-                <th className="w-[120px] border-b border-airtable-border bg-airtable-header-bg px-2 py-2">
+                {headerGroup.headers.map((header, hIdx) => {
+                  const colId = header.column.id;
+                  const isFrozen = hIdx === 0;
+                  return (
+                    <th
+                      key={header.id}
+                      className={`group relative border-b border-r border-airtable-border bg-white px-3 py-2 text-left text-[13px] ${
+                        isFrozen ? "sticky z-[3]" : ""
+                      }`}
+                      style={{
+                        width: getColWidth(colId),
+                        minWidth: MIN_COL_WIDTH,
+                        ...(isFrozen ? { left: ROW_NUM_WIDTH } : {}),
+                      }}
+                    >
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
+                      {/* Resize handle */}
+                      <div
+                        onMouseDown={(e) => startResize(colId, e)}
+                        className="absolute right-0 top-0 z-[4] h-full w-[5px] cursor-col-resize hover:bg-airtable-blue/40"
+                      />
+                      {/* Freeze line — thick blue right-border on the frozen column */}
+                      {isFrozen && (
+                        <div className="pointer-events-none absolute right-0 top-0 h-full w-[2px] bg-[#c5c5c5]" />
+                      )}
+                    </th>
+                  );
+                })}
+                {/* Add-column header */}
+                <th className="w-[72px] min-w-[72px] border-b border-airtable-border bg-white p-0">
                   {showColumnForm ? (
                     <form
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1 px-2"
                       onSubmit={(e) => {
                         e.preventDefault();
                         if (!newColumnName.trim()) return;
@@ -848,27 +918,21 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
                         <option value="TEXT">Text</option>
                         <option value="NUMBER">Number</option>
                         <option value="CHECKBOX">Checkbox</option>
-                        <option value="DATE">Date</option>
                       </select>
                     </form>
                   ) : (
-                    <button
-                      onClick={() => setShowColumnForm(true)}
-                      className="flex items-center gap-1 text-[13px] font-medium text-airtable-text-muted hover:text-airtable-blue"
-                      title="Add field"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
+                    <div className="flex h-full items-center justify-center">
+                      <button
+                        onClick={() => setShowColumnForm(true)}
+                        className="text-[#d0d5dd] hover:text-airtable-blue"
+                        title="Add field"
                       >
-                        <line x1="8" y1="3" x2="8" y2="13" />
-                        <line x1="3" y1="8" x2="13" y2="8" />
-                      </svg>
-                    </button>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <line x1="8" y1="3" x2="8" y2="13" />
+                          <line x1="3" y1="8" x2="13" y2="8" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                 </th>
               </tr>
@@ -880,121 +944,129 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
                 <td style={{ height: `${paddingTop}px` }} />
               </tr>
             )}
-            {virtualRows.map((virtualRow) => {
-              const row = tableRows[virtualRow.index]!;
-              const rowIdx = virtualRow.index;
-              const isGroupHeader = row.original._isGroupHeader;
+            {(() => {
+              let dataRowNum = 0; // Counter for data rows only (not group headers)
+              return virtualRows.map((virtualRow) => {
+                const row = tableRows[virtualRow.index]!;
+                const isGroupHeader = row.original._isGroupHeader;
 
-              // Render group header row
-              if (isGroupHeader) {
-                const groupValue = row.original._groupValue ?? "(empty)";
-                const groupRowCount = flatData.filter(
-                  (r) => !r._isGroupHeader && r._groupValue === groupValue
-                ).length;
+                // Render group header row
+                if (isGroupHeader) {
+                  const groupValue = row.original._groupValue ?? "(empty)";
+                  const groupRowCount = flatData.filter(
+                    (r) => !r._isGroupHeader && r._groupValue === groupValue
+                  ).length;
+
+                  return (
+                    <tr
+                      key={row.id}
+                      data-index={virtualRow.index}
+                      ref={rowVirtualizer.measureElement}
+                      className="bg-purple-50"
+                      style={{ height: `${ROW_HEIGHT}px` }}
+                    >
+                      <td
+                        colSpan={dbColumns.length + 2}
+                        className="border-b border-airtable-border px-3 py-1"
+                      >
+                        <div className="flex items-center gap-2">
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-purple-600">
+                            <rect x="1" y="2" width="6" height="5" rx="1" />
+                            <rect x="1" y="9" width="6" height="5" rx="1" />
+                            <path d="M9 4.5h5M9 11.5h5" />
+                          </svg>
+                          <span className="text-[13px] font-medium text-purple-700">
+                            {groupValue}
+                          </span>
+                          <span className="text-[12px] text-purple-500">
+                            ({groupRowCount} record{groupRowCount !== 1 ? "s" : ""})
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                dataRowNum++;
+                const displayRowNum = dataRowNum;
+                const rowIdx = virtualRow.index;
 
                 return (
                   <tr
                     key={row.id}
                     data-index={virtualRow.index}
                     ref={rowVirtualizer.measureElement}
-                    className="bg-purple-50"
+                    className="group"
                     style={{ height: `${ROW_HEIGHT}px` }}
                   >
+                    {/* Row number / checkbox gutter */}
                     <td
-                      colSpan={dbColumns.length + 2}
-                      className="border-b border-airtable-border px-3 py-1"
+                      className="sticky left-0 z-[1] border-b border-r border-airtable-border bg-white p-0 text-center text-[11px] text-[#aaaaaa]"
+                      style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
                     >
-                      <div className="flex items-center gap-2">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-purple-600">
-                          <rect x="1" y="2" width="6" height="5" rx="1" />
-                          <rect x="1" y="9" width="6" height="5" rx="1" />
-                          <path d="M9 4.5h5M9 11.5h5" />
-                        </svg>
-                        <span className="text-[13px] font-medium text-purple-700">
-                          {groupValue}
+                      <div className="flex h-full items-center justify-center">
+                        <span className="group-hover:hidden">
+                          {displayRowNum}
                         </span>
-                        <span className="text-[12px] text-purple-500">
-                          ({groupRowCount} record{groupRowCount !== 1 ? "s" : ""})
-                        </span>
+                        <div className="hidden h-full items-center justify-center group-hover:flex">
+                          <input
+                            type="checkbox"
+                            className="h-[14px] w-[14px] cursor-pointer rounded-sm border-[#d0d5dd] text-airtable-blue focus:ring-airtable-blue focus:ring-offset-0"
+                          />
+                        </div>
                       </div>
                     </td>
+                    {row.getVisibleCells().map((cell, colIdx) => {
+                      const col = dbColumns[colIdx];
+                      if (!col) return null;
+                      const rowId = row.original._rowId;
+                      const editKey = `${rowId}_${col.id}`;
+                      const cellValue = pendingEdits[editKey] ?? String(row.original[col.id] ?? "");
+                      const isFrozen = colIdx === 0;
+                      return (
+                        <td
+                          key={cell.id}
+                          className={`relative h-[32px] border-b border-r border-airtable-border p-0 ${
+                            isFrozen ? "sticky z-[1] bg-white" : ""
+                          }`}
+                          style={{
+                            width: getColWidth(col.id),
+                            minWidth: MIN_COL_WIDTH,
+                            ...(isFrozen ? { left: ROW_NUM_WIDTH } : {}),
+                          }}
+                        >
+                          <CellInput
+                            cellValue={cellValue}
+                            fieldType={col.fieldType}
+                            isFocused={
+                              focusedCell?.row === rowIdx &&
+                              focusedCell?.col === colIdx
+                            }
+                            onNavigate={navigateCell}
+                            onFocus={() =>
+                              setFocusedCell({ row: rowIdx, col: colIdx })
+                            }
+                            onSave={(val) => {
+                              setPendingEdits((prev) => ({ ...prev, [editKey]: val }));
+                              updateCell.mutate({
+                                rowId,
+                                columnId: col.id,
+                                cellValue: val,
+                              });
+                            }}
+                          />
+                          {/* Freeze line on data cells */}
+                          {isFrozen && (
+                            <div className="pointer-events-none absolute right-0 top-0 h-full w-[2px] bg-[#c5c5c5]" />
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="border-b border-airtable-border" />
                   </tr>
                 );
-              }
-
-              return (
-                <tr
-                  key={row.id}
-                  data-index={virtualRow.index}
-                  ref={rowVirtualizer.measureElement}
-                  className="group transition-colors hover:bg-airtable-row-hover"
-                  style={{ height: `${ROW_HEIGHT}px` }}
-                >
-                  <td className="border-b border-r border-airtable-border bg-airtable-header-bg px-1 py-0 text-center text-[12px] text-airtable-text-muted group-hover:bg-gray-100">
-                    <div className="flex items-center justify-center gap-0.5">
-                      <span className="w-5 group-hover:hidden">
-                        {rowIdx + 1}
-                      </span>
-                      <button
-                        onClick={() => {
-                          deleteRow.mutate({
-                            rowId: row.original._rowId,
-                          });
-                        }}
-                        className="hidden rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 group-hover:block"
-                        title="Delete row"
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                        >
-                          <path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
-                  {row.getVisibleCells().map((cell, colIdx) => {
-                    const col = dbColumns[colIdx];
-                    if (!col) return null;
-                    const rowId = row.original._rowId;
-                    const editKey = `${rowId}_${col.id}`;
-                    const cellValue = pendingEdits[editKey] ?? String(row.original[col.id] ?? "");
-                    return (
-                      <td
-                        key={cell.id}
-                        className="h-[32px] border-b border-r border-airtable-border p-0"
-                      >
-                        <CellInput
-                          cellValue={cellValue}
-                          fieldType={col.fieldType}
-                          isFocused={
-                            focusedCell?.row === rowIdx &&
-                            focusedCell?.col === colIdx
-                          }
-                          onNavigate={navigateCell}
-                          onFocus={() =>
-                            setFocusedCell({ row: rowIdx, col: colIdx })
-                          }
-                          onSave={(val) => {
-                            setPendingEdits((prev) => ({ ...prev, [editKey]: val }));
-                            updateCell.mutate({
-                              rowId,
-                              columnId: col.id,
-                              cellValue: val,
-                            });
-                          }}
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className="border-b border-airtable-border" />
-                </tr>
-              );
-            })}
+              });
+            })()}
             {paddingBottom > 0 && (
               <tr>
                 <td style={{ height: `${paddingBottom}px` }} />
@@ -1002,24 +1074,51 @@ export function TableGrid({ tableId, groupByColumnId, filters = [], searchQuery 
             )}
           </tbody>
         </table>
-        <button
-          onClick={() => addRow.mutate({ tableId: table.id })}
-          disabled={addRow.isPending}
-          className="flex w-full items-center gap-2 border-b border-airtable-border px-4 py-2 text-[13px] text-airtable-text-muted hover:bg-airtable-row-hover hover:text-airtable-blue"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+        {/* Add row — inline "+" row matching Airtable */}
+        <div className="flex h-8 items-center border-b border-airtable-border">
+          <button
+            onClick={() => addRow.mutate({ tableId: table.id })}
+            disabled={addRow.isPending}
+            className="sticky left-0 z-[1] flex h-full items-center justify-center border-r border-airtable-border bg-white text-[#aaaaaa] hover:text-airtable-blue"
+            style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
           >
-            <line x1="8" y1="3" x2="8" y2="13" />
-            <line x1="3" y1="8" x2="13" y2="8" />
-          </svg>
-          {addRow.isPending ? "Adding..." : "Add record"}
-        </button>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="8" y1="3" x2="8" y2="13" />
+              <line x1="3" y1="8" x2="13" y2="8" />
+            </svg>
+          </button>
+        </div>
+        {/* Left gutter extending below data */}
+        <div className="flex min-h-[200px] flex-1">
+          <div
+            className="sticky left-0 z-[1] shrink-0 border-r border-airtable-border bg-white"
+            style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
+          />
+          <div className="flex-1" />
+        </div>
+        </div>
+      </div>
+      {/* Footer - record count + add buttons */}
+      <div className="shrink-0 border-t border-airtable-border bg-white px-1.5 py-1.5">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => addRow.mutate({ tableId: table.id })}
+            className="flex h-7 w-7 items-center justify-center rounded text-airtable-text-muted hover:bg-gray-100 hover:text-airtable-blue"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="8" y1="3" x2="8" y2="13" />
+              <line x1="3" y1="8" x2="13" y2="8" />
+            </svg>
+          </button>
+          <button className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-[12px] text-airtable-text-muted shadow-sm hover:bg-gray-50">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400">
+              <path d="M2 4h12M2 8h12M2 12h8" />
+            </svg>
+            Add...
+          </button>
+        </div>
+        <div className="px-1 pt-1 text-[11px] text-airtable-text-muted">
+          {totalRowCount} record{totalRowCount !== 1 ? "s" : ""}
         </div>
       </div>
     </div>

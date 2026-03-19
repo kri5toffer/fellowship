@@ -8,7 +8,7 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 // Shared Enums & Helpers
 // ============================================================================
 
-const FieldTypeEnum = z.enum(["TEXT", "NUMBER", "CHECKBOX", "DATE"]);
+const FieldTypeEnum = z.enum(["TEXT", "NUMBER", "CHECKBOX"]);
 
 function generateFakeValue(fieldType: string): string {
   switch (fieldType) {
@@ -16,8 +16,6 @@ function generateFakeValue(fieldType: string): string {
       return String(faker.number.int({ min: 0, max: 100_000 }));
     case "CHECKBOX":
       return faker.datatype.boolean() ? "true" : "false";
-    case "DATE":
-      return faker.date.between({ from: "2020-01-01", to: "2026-12-31" }).toISOString().split("T")[0]!;
     case "TEXT":
     default:
       return faker.person.fullName();
@@ -26,6 +24,17 @@ function generateFakeValue(fieldType: string): string {
 
 type FilterInput = { columnId: string; operator: string; value: string };
 type ColumnInfo = { id: string; fieldType: string };
+
+// Recursive filter tree types (mirrors client-side types)
+type FilterNodeServer =
+  | { id: string; type?: "condition"; columnId: string; operator: string; value: string }
+  | { id: string; type: "group"; conjunction: "and" | "or"; children: FilterNodeServer[] };
+
+function isServerFilterGroup(
+  node: FilterNodeServer,
+): node is { id: string; type: "group"; conjunction: "and" | "or"; children: FilterNodeServer[] } {
+  return "type" in node && node.type === "group";
+}
 
 function buildCellCondition(filter: FilterInput, _fieldType: string) {
   const { operator, value } = filter;
@@ -75,31 +84,52 @@ function buildCellCondition(filter: FilterInput, _fieldType: string) {
   }
 }
 
+/** Build a Prisma RowWhereInput from a single FilterNode (recursive). */
+function buildFilterNodeCondition(
+  node: FilterNodeServer,
+  columnMap: Record<string, ColumnInfo>,
+): Prisma.RowWhereInput | null {
+  if (isServerFilterGroup(node)) {
+    const childConditions = node.children
+      .map((child) => buildFilterNodeCondition(child, columnMap))
+      .filter((c): c is Prisma.RowWhereInput => c !== null);
+
+    if (childConditions.length === 0) return null;
+
+    return node.conjunction === "or"
+      ? { OR: childConditions }
+      : { AND: childConditions };
+  }
+
+  // It's a condition
+  const col = columnMap[node.columnId];
+  const fieldType = col?.fieldType ?? "TEXT";
+  const cellCondition = buildCellCondition(node, fieldType);
+
+  return {
+    cells: {
+      some: {
+        columnId: node.columnId,
+        ...cellCondition,
+      },
+    },
+  };
+}
+
+/** Build where clause from a FilterGroup tree. */
 function buildRowsWhereClause(
   tableId: string,
-  filters: FilterInput[],
+  filterGroup: FilterNodeServer | null | undefined,
   columnMap: Record<string, ColumnInfo>,
 ): Prisma.RowWhereInput {
   const base: Prisma.RowWhereInput = { tableId };
 
-  if (filters.length === 0) return base;
+  if (!filterGroup) return base;
 
-  const andConditions: Prisma.RowWhereInput[] = filters.map((filter) => {
-    const col = columnMap[filter.columnId];
-    const fieldType = col?.fieldType ?? "TEXT";
-    const cellCondition = buildCellCondition(filter, fieldType);
+  const condition = buildFilterNodeCondition(filterGroup, columnMap);
+  if (!condition) return base;
 
-    return {
-      cells: {
-        some: {
-          columnId: filter.columnId,
-          ...cellCondition,
-        },
-      },
-    };
-  });
-
-  return { ...base, AND: andConditions };
+  return { ...base, AND: [condition] };
 }
 
 // ============================================================================
@@ -114,18 +144,36 @@ const GetByIdInput = z.object({
   id: z.string(),
 });
 
-const FilterConditionInput = z.object({
+const FilterNodeInput: z.ZodType<FilterNodeServer> = z.lazy(() =>
+  z.union([
+    z.object({
+      id: z.string(),
+      type: z.literal("condition").optional(),
+      columnId: z.string(),
+      operator: z.string(),
+      value: z.string(),
+    }),
+    z.object({
+      id: z.string(),
+      type: z.literal("group"),
+      conjunction: z.enum(["and", "or"]),
+      children: z.array(FilterNodeInput),
+    }),
+  ]),
+);
+
+const FilterGroupInput = z.object({
   id: z.string(),
-  columnId: z.string(),
-  operator: z.string(),
-  value: z.string(),
+  type: z.literal("group"),
+  conjunction: z.enum(["and", "or"]),
+  children: z.array(FilterNodeInput),
 });
 
 const GetRowsInput = z.object({
   tableId: z.string(),
   limit: z.number().min(1).max(500).default(100),
   cursor: z.string().nullish(),
-  filters: z.array(FilterConditionInput).optional().default([]),
+  filterGroup: FilterGroupInput.optional(),
   search: z.string().optional().default(""),
 });
 
@@ -215,7 +263,7 @@ export const tableRouter = createTRPCRouter({
   getRows: publicProcedure
     .input(GetRowsInput)
     .query(async ({ ctx, input }) => {
-      const { tableId, limit, cursor, filters, search } = input;
+      const { tableId, limit, cursor, filterGroup, search } = input;
 
       const table = await ctx.db.table.findUnique({
         where: { id: tableId },
@@ -225,7 +273,7 @@ export const tableRouter = createTRPCRouter({
         (table?.columns ?? []).map((c) => [c.id, c]),
       );
 
-      const whereClause = buildRowsWhereClause(tableId, filters, columnMap);
+      const whereClause = buildRowsWhereClause(tableId, filterGroup, columnMap);
 
       if (search) {
         whereClause.AND = [

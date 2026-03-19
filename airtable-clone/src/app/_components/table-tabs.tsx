@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import {
   ArrowDownUp,
-  Calendar,
   Check,
   CheckSquare,
   ChevronDown,
   Hash,
+  LayoutGrid,
+  Menu,
   Palette,
   Plus,
   Search,
@@ -18,16 +19,16 @@ import {
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { TableGrid } from "./table-grid";
-import { FilterBar, type FilterCondition } from "./filter-bar";
+import { FilterBar, type FilterGroup, createEmptyFilterGroup, migrateFilters } from "./filter-bar";
 import { HideFieldsPanel } from "./hide-fields-panel";
 import { ViewsSidebar } from "./views-sidebar";
+import { UserButton } from "./user-button";
 import { Button } from "~/components/ui/button";
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   TEXT: <Type className="size-3.5 text-gray-500" />,
   NUMBER: <Hash className="size-3.5 text-orange-500" />,
   CHECKBOX: <CheckSquare className="size-3.5 text-purple-500" />,
-  DATE: <Calendar className="size-3.5 text-cyan-600" />,
 };
 
 export function TableTabs({ baseId }: { baseId: string }) {
@@ -43,13 +44,17 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortSearchQuery, setSortSearchQuery] = useState("");
   const sortMenuRef = useRef<HTMLDivElement>(null);
-  const [filters, setFilters] = useState<FilterCondition[]>([]);
+  const [filterGroup, setFilterGroup] = useState<FilterGroup>(createEmptyFilterGroup());
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [hiddenFieldIds, setHiddenFieldIds] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ columnId: string; direction: "asc" | "desc" } | null>(null);
+  const [viewColor, setViewColor] = useState<string | null>(null);
   const [tableMenuId, setTableMenuId] = useState<string | null>(null);
   const [renamingTableId, setRenamingTableId] = useState<string | null>(null);
   const [renameTableValue, setRenameTableValue] = useState("");
+  const [recordTypeName, setRecordTypeName] = useState("Record");
+  const [isAddingRow, setIsAddingRow] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
   const tableMenuRef = useRef<HTMLDivElement>(null);
 
   const tableList = tables ?? [];
@@ -63,20 +68,24 @@ export function TableTabs({ baseId }: { baseId: string }) {
   useEffect(() => {
     setActiveTableId(null);
     setGroupByColumnId(null);
-    setFilters([]);
+    setFilterGroup(createEmptyFilterGroup());
     setActiveViewId(null);
     setShowSearch(false);
     setSearchQuery("");
     setSortConfig(null);
+    setHiddenFieldIds([]);
+    setViewColor(null);
   }, [baseId]);
 
   useEffect(() => {
     setGroupByColumnId(null);
-    setFilters([]);
+    setFilterGroup(createEmptyFilterGroup());
     setActiveViewId(null);
     setShowSearch(false);
     setSearchQuery("");
     setSortConfig(null);
+    setHiddenFieldIds([]);
+    setViewColor(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -103,12 +112,18 @@ export function TableTabs({ baseId }: { baseId: string }) {
 
   const handleSelectView = (view: {
     id: string | null;
-    filters: FilterCondition[];
+    filters: unknown;
     groupByColumnId: string | null;
+    sortConfig: { columnId: string; direction: "asc" | "desc" } | null;
+    hiddenFieldIds: string[];
+    color: string | null;
   }) => {
     setActiveViewId(view.id);
-    setFilters(view.filters);
+    setFilterGroup(migrateFilters(view.filters));
     setGroupByColumnId(view.groupByColumnId);
+    setSortConfig(view.sortConfig);
+    setHiddenFieldIds(view.hiddenFieldIds);
+    setViewColor(view.color);
   };
 
   const createTable = api.table.create.useMutation({
@@ -163,7 +178,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
       utils.table.getAll.setData({ baseId }, context?.previousTables);
     },
     onSettled: () => { void utils.table.getAll.invalidate({ baseId }); },
-    onSuccess: () => { setRenamingTableId(null); setRenameTableValue(""); },
+    onSuccess: () => { /* form already closed optimistically */ },
   });
 
   const updateView = api.view.update.useMutation({
@@ -176,11 +191,8 @@ export function TableTabs({ baseId }: { baseId: string }) {
           v.id === variables.id
             ? {
                 ...v,
-                filters: variables.filters ?? v.filters,
-                groupByColumnId:
-                  variables.groupByColumnId !== undefined
-                    ? variables.groupByColumnId
-                    : v.groupByColumnId,
+                filters: (variables.filters as typeof v.filters) ?? v.filters,
+                groupByColumnId: variables.groupByColumnId !== undefined ? variables.groupByColumnId : v.groupByColumnId,
               }
             : v,
         ),
@@ -214,7 +226,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
       {/* Table tabs bar */}
       <nav
         aria-label="Tables"
-        className="flex flex-none items-center border-b border-gray-200 bg-white px-2"
+        className="flex flex-none items-center border-b border-gray-200 bg-[#f3e8ff] px-2"
         style={{ height: 40 }}
       >
         <div className="flex min-w-0 flex-1 items-center">
@@ -224,68 +236,148 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 <span className="select-none px-0.5 text-[13px] text-gray-300">|</span>
               )}
 
-              {renamingTableId === t.id ? (
-                <form
-                  className="flex items-center"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (renameTableValue.trim()) renameTable.mutate({ tableId: t.id, tableName: renameTableValue.trim() });
-                  }}
-                >
-                  <input
-                    autoFocus
-                    value={renameTableValue}
-                    onChange={(e) => setRenameTableValue(e.target.value)}
-                    onBlur={() => {
-                      if (renameTableValue.trim()) renameTable.mutate({ tableId: t.id, tableName: renameTableValue.trim() });
-                      else { setRenamingTableId(null); setRenameTableValue(""); }
+              <button
+                onClick={() => handleTableSwitch(t.id)}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 text-[13px] transition-colors ${
+                  t.id === selectedId
+                    ? "font-semibold text-gray-900"
+                    : "font-normal text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                <span className="truncate max-w-[140px]">{t.tableName}</span>
+                {t.id === selectedId && (
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTableMenuId(tableMenuId === t.id ? null : t.id);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") { setRenamingTableId(null); setRenameTableValue(""); }
-                    }}
-                    className="rounded border border-airtable-blue bg-white px-2 py-0.5 text-[13px] text-gray-900 outline-none"
-                  />
-                </form>
-              ) : (
-                <button
-                  onClick={() => handleTableSwitch(t.id)}
-                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-[13px] transition-colors ${
-                    t.id === selectedId
-                      ? "font-semibold text-gray-900"
-                      : "font-normal text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-                >
-                  <span className="truncate max-w-[140px]">{t.tableName}</span>
-                  {t.id === selectedId && (
-                    <span
-                      role="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTableMenuId(tableMenuId === t.id ? null : t.id);
-                      }}
-                      className="flex items-center"
-                    >
-                      <ChevronDown className="size-3.5 shrink-0 text-gray-500" />
-                    </span>
-                  )}
-                </button>
-              )}
+                    className="flex items-center"
+                  >
+                    <ChevronDown className="size-3.5 shrink-0 text-gray-500" />
+                  </span>
+                )}
+              </button>
 
               {tableMenuId === t.id && (
                 <div
                   ref={tableMenuRef}
-                  className="absolute left-0 top-full z-40 mt-0.5 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                  className="absolute left-0 top-full z-40 mt-0.5 w-60 rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
                 >
+                  {/* Import data */}
+                  <button className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <span className="flex items-center gap-2.5">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                        <path d="M8 2v8M5 7l3 3 3-3" />
+                        <path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" />
+                      </svg>
+                      Import data
+                    </span>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-400">
+                      <path d="M6 4l4 4-4 4" />
+                    </svg>
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Rename table */}
                   <button
                     onClick={() => { setRenamingTableId(t.id); setRenameTableValue(t.tableName); setTableMenuId(null); }}
-                    className="flex w-full items-center px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
                   >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <path d="M11 2.5l2.5 2.5-8 8H3V10.5l8-8z" />
+                    </svg>
                     Rename table
                   </button>
+
+                  {/* Hide table */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
+                      <circle cx="8" cy="8" r="2" />
+                      <line x1="2" y1="2" x2="14" y2="14" />
+                    </svg>
+                    Hide table
+                  </button>
+
+                  {/* Manage fields */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <line x1="1" y1="4" x2="15" y2="4" />
+                      <line x1="1" y1="8" x2="15" y2="8" />
+                      <line x1="1" y1="12" x2="15" y2="12" />
+                      <circle cx="5" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth="1.5" />
+                      <circle cx="10" cy="12" r="1.5" fill="white" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                    Manage fields
+                  </button>
+
+                  {/* Duplicate table */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <rect x="5" y="5" width="9" height="9" rx="1" />
+                      <path d="M2 11V2h9" />
+                    </svg>
+                    Duplicate table
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Configure date dependencies */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <rect x="1" y="2" width="5" height="5" rx="1" />
+                      <rect x="10" y="9" width="5" height="5" rx="1" />
+                      <path d="M6 4.5h2a2 2 0 0 1 2 2v2" />
+                      <path d="M9 7l1.5 1.5L9 10" />
+                    </svg>
+                    Configure date dependencies
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Edit table description */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <circle cx="8" cy="8" r="6" />
+                      <path d="M8 7v4" />
+                      <circle cx="8" cy="5" r="0.5" fill="currentColor" />
+                    </svg>
+                    Edit table description
+                  </button>
+
+                  {/* Edit table permissions */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <rect x="3" y="7" width="10" height="7" rx="1" />
+                      <path d="M5 7V5a3 3 0 0 1 6 0v2" />
+                    </svg>
+                    Edit table permissions
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Clear data */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <line x1="4" y1="4" x2="12" y2="12" />
+                      <line x1="12" y1="4" x2="4" y2="12" />
+                    </svg>
+                    Clear data
+                  </button>
+
+                  {/* Delete table */}
                   <button
                     onClick={() => { deleteTable.mutate({ tableId: t.id }); setTableMenuId(null); }}
-                    className="flex w-full items-center px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
                   >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+                      <path d="M2 4h12" />
+                      <path d="M5 4V2h6v2" />
+                      <path d="M6 7v5M10 7v5" />
+                      <path d="M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9" />
+                    </svg>
                     Delete table
                   </button>
                 </div>
@@ -333,7 +425,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
           )}
         </div>
 
-        {/* Overflow chevron - far right */}
+        {/* Overflow chevron */}
         <button
           type="button"
           className="ml-1 flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100"
@@ -341,10 +433,41 @@ export function TableTabs({ baseId }: { baseId: string }) {
         >
           <ChevronDown className="size-4" />
         </button>
+
+        {/* Spacer + User button */}
+        <div className="flex-1" />
+        <UserButton />
       </nav>
 
       {selectedId && (
-        <div className="flex items-center gap-1 border-b border-airtable-border bg-white px-3 py-1.5">
+        <div className="flex items-center gap-1 border-b border-airtable-border bg-white px-2 py-1.5">
+          {/* Left side: hamburger toggle + Grid view label */}
+          <button
+            type="button"
+            onClick={() => setShowSidebar((v) => !v)}
+            className="rounded p-1 text-airtable-text-muted hover:bg-gray-100 hover:text-airtable-text-primary"
+            title={showSidebar ? "Hide sidebar" : "Show sidebar"}
+          >
+            <Menu className="size-4" />
+          </button>
+          <div className="flex items-center gap-1.5 rounded-sm px-1.5 py-1">
+            <LayoutGrid className="size-4 shrink-0 text-airtable-blue" />
+            <span className="text-[13px] font-medium text-airtable-text-primary">
+              Grid view
+            </span>
+            <ChevronDown className="size-3.5 text-airtable-text-muted" />
+          </div>
+
+          {/* Loading indicator for row operations */}
+          {isAddingRow && (
+            <div className="flex items-center gap-1.5 text-[12px] text-airtable-text-muted">
+              <svg className="size-3.5 animate-spin text-airtable-blue" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
+              </svg>
+              Saving...
+            </div>
+          )}
+
           {/* Spacer - pushes tools to the right */}
           <div className="flex-1" />
 
@@ -352,25 +475,101 @@ export function TableTabs({ baseId }: { baseId: string }) {
           <HideFieldsPanel
             columns={activeTable?.columns ?? []}
             hiddenFieldIds={hiddenFieldIds}
-            onChange={setHiddenFieldIds}
+            onChange={(ids) => {
+              setHiddenFieldIds(ids);
+              if (activeViewId) {
+                updateView.mutate({ id: activeViewId, hiddenFieldIds: ids });
+              }
+            }}
           />
 
           <FilterBar
             columns={activeTable?.columns ?? []}
-            filters={filters}
-            onChange={(f) => {
-              setFilters(f);
+            filterGroup={filterGroup}
+            onChange={(g) => {
+              setFilterGroup(g);
               if (activeViewId) {
                 updateView.mutate({
                   id: activeViewId,
-                  filters: f,
-                  groupByColumnId: groupByColumnId ?? undefined,
+                  filters: g as unknown as Record<string, unknown>,
                 });
               }
             }}
           />
 
-          {/* Sort button */}
+          {/* Group button */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowGroupMenu(!showGroupMenu);
+                setShowSortMenu(false);
+              }}
+              className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] ${
+                groupByColumnId
+                  ? "bg-airtable-purple/15 font-medium text-airtable-purple"
+                  : "text-airtable-text-secondary hover:bg-gray-100"
+              }`}
+            >
+              <SquareSplitHorizontal className="size-3.5 shrink-0" />
+              {groupByColumnId ? "Grouped by 1 field" : "Group"}
+            </button>
+
+            {showGroupMenu && (
+              <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                <div className="px-3 py-1.5 text-[11px] font-medium uppercase text-gray-400">
+                  Group by field
+                </div>
+                {activeTable?.columns.map((col) => (
+                  <button
+                    key={col.id}
+                    onClick={() => {
+                      const newGroupBy = col.id === groupByColumnId ? null : col.id;
+                      setGroupByColumnId(newGroupBy);
+                      if (activeViewId) {
+                        updateView.mutate({
+                          id: activeViewId,
+                          groupByColumnId: newGroupBy ?? undefined,
+                        });
+                      }
+                      setShowGroupMenu(false);
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-gray-50 ${
+                      col.id === groupByColumnId ? "bg-purple-50 text-purple-700" : "text-airtable-text-primary"
+                    }`}
+                  >
+                    {FIELD_TYPE_ICONS[col.fieldType]}
+                    {col.columnName}
+                    {col.id === groupByColumnId && (
+                      <Check className="ml-auto size-3.5" />
+                    )}
+                  </button>
+                ))}
+                {groupByColumnId && (
+                  <>
+                    <div className="my-1 border-t border-gray-100" />
+                    <button
+                      onClick={() => {
+                        setGroupByColumnId(null);
+                        if (activeViewId) {
+                          updateView.mutate({
+                            id: activeViewId,
+                            groupByColumnId: null,
+                          });
+                        }
+                        setShowGroupMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                    >
+                      <X className="size-3.5" />
+                      Remove grouping
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sort button - yellow/gold when active */}
           <div ref={sortMenuRef} className="relative">
             <button
               type="button"
@@ -380,17 +579,12 @@ export function TableTabs({ baseId }: { baseId: string }) {
               }}
               className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] transition-colors ${
                 sortConfig
-                  ? "bg-orange-100 font-medium text-orange-700"
+                  ? "bg-[#fff3cd] font-medium text-[#856404] border border-[#ffc107]/40"
                   : "text-airtable-text-secondary hover:bg-gray-100"
               }`}
             >
               <ArrowDownUp className="size-3.5" />
-              Sort
-              {sortConfig && (
-                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
-                  1
-                </span>
-              )}
+              {sortConfig ? "Sorted by 1 field" : "Sort"}
             </button>
 
             {showSortMenu && (
@@ -416,20 +610,28 @@ export function TableTabs({ baseId }: { baseId: string }) {
                         </span>
                         <div className="flex rounded-md border border-gray-200 text-[12px]">
                           <button
-                            onClick={() => setSortConfig({ ...sortConfig, direction: "asc" })}
+                            onClick={() => {
+                              const next = { ...sortConfig, direction: "asc" as const };
+                              setSortConfig(next);
+                              if (activeViewId) updateView.mutate({ id: activeViewId, sortConfig: next });
+                            }}
                             className={`rounded-l-md px-2 py-1 transition-colors ${
                               sortConfig.direction === "asc"
-                                ? "bg-orange-500 text-white"
+                                ? "bg-[#ffc107] text-white"
                                 : "text-gray-600 hover:bg-gray-50"
                             }`}
                           >
                             {isNumber ? "1→9" : "A→Z"}
                           </button>
                           <button
-                            onClick={() => setSortConfig({ ...sortConfig, direction: "desc" })}
+                            onClick={() => {
+                              const next = { ...sortConfig, direction: "desc" as const };
+                              setSortConfig(next);
+                              if (activeViewId) updateView.mutate({ id: activeViewId, sortConfig: next });
+                            }}
                             className={`rounded-r-md border-l border-gray-200 px-2 py-1 transition-colors ${
                               sortConfig.direction === "desc"
-                                ? "bg-orange-500 text-white"
+                                ? "bg-[#ffc107] text-white"
                                 : "text-gray-600 hover:bg-gray-50"
                             }`}
                           >
@@ -437,7 +639,10 @@ export function TableTabs({ baseId }: { baseId: string }) {
                           </button>
                         </div>
                         <button
-                          onClick={() => setSortConfig(null)}
+                          onClick={() => {
+                            setSortConfig(null);
+                            if (activeViewId) updateView.mutate({ id: activeViewId, sortConfig: null });
+                          }}
                           className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                           title="Remove sort"
                         >
@@ -476,20 +681,20 @@ export function TableTabs({ baseId }: { baseId: string }) {
                           key={col.id}
                           type="button"
                           onClick={() => {
-                            setSortConfig(
-                              isActive
-                                ? { columnId: col.id, direction: sortConfig.direction === "asc" ? "desc" : "asc" }
-                                : { columnId: col.id, direction: "asc" },
-                            );
+                            const next = isActive
+                              ? { columnId: col.id, direction: sortConfig.direction === "asc" ? "desc" as const : "asc" as const }
+                              : { columnId: col.id, direction: "asc" as const };
+                            setSortConfig(next);
+                            if (activeViewId) updateView.mutate({ id: activeViewId, sortConfig: next });
                           }}
                           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-gray-50 ${
-                            isActive ? "bg-orange-50 text-orange-700" : "text-airtable-text-primary"
+                            isActive ? "bg-yellow-50 text-[#856404]" : "text-airtable-text-primary"
                           }`}
                         >
                           <span className="shrink-0">{FIELD_TYPE_ICONS[col.fieldType] ?? FIELD_TYPE_ICONS.TEXT}</span>
                           <span className="flex-1 truncate">{col.columnName}</span>
                           {isActive && (
-                            <span className="shrink-0 text-[11px] font-medium text-orange-600">
+                            <span className="shrink-0 text-[11px] font-medium text-[#856404]">
                               {sortConfig.direction === "asc" ? (isNumber ? "1→9" : "A→Z") : (isNumber ? "9→1" : "Z→A")}
                             </span>
                           )}
@@ -497,80 +702,6 @@ export function TableTabs({ baseId }: { baseId: string }) {
                       );
                     })}
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Group button - purple when active */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setShowGroupMenu(!showGroupMenu);
-                setShowSortMenu(false);
-              }}
-              className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] ${
-                groupByColumnId
-                  ? "bg-airtable-purple/15 font-medium text-airtable-purple"
-                  : "text-airtable-text-secondary hover:bg-gray-100"
-              }`}
-            >
-              <SquareSplitHorizontal className="size-3.5 shrink-0" />
-              {groupByColumnId ? "Grouped by 1 field" : "Group"}
-            </button>
-
-            {showGroupMenu && (
-              <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                <div className="px-3 py-1.5 text-[11px] font-medium uppercase text-gray-400">
-                  Group by field
-                </div>
-                {activeTable?.columns.map((col) => (
-                  <button
-                    key={col.id}
-                    onClick={() => {
-                      const newGroupBy = col.id === groupByColumnId ? null : col.id;
-                      setGroupByColumnId(newGroupBy);
-                      if (activeViewId) {
-                        updateView.mutate({
-                          id: activeViewId,
-                          filters,
-                          groupByColumnId: newGroupBy ?? undefined,
-                        });
-                      }
-                      setShowGroupMenu(false);
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-gray-50 ${
-                      col.id === groupByColumnId ? "bg-purple-50 text-purple-700" : "text-airtable-text-primary"
-                    }`}
-                  >
-                    {FIELD_TYPE_ICONS[col.fieldType]}
-                    {col.columnName}
-                    {col.id === groupByColumnId && (
-                      <Check className="ml-auto size-3.5" />
-                    )}
-                  </button>
-                ))}
-                {groupByColumnId && (
-                  <>
-                    <div className="my-1 border-t border-gray-100" />
-                    <button
-                      onClick={() => {
-                        setGroupByColumnId(null);
-                        if (activeViewId) {
-                          updateView.mutate({
-                            id: activeViewId,
-                            filters,
-                            groupByColumnId: null,
-                          });
-                        }
-                        setShowGroupMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
-                    >
-                      <X className="size-3.5" />
-                      Remove grouping
-                    </button>
-                  </>
-                )}
               </div>
             )}
           </div>
@@ -623,37 +754,145 @@ export function TableTabs({ baseId }: { baseId: string }) {
               )}
             </div>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setShowSearch(true)}
-              className="h-auto gap-1.5 px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100"
+              className="rounded-sm p-1.5 text-airtable-text-secondary hover:bg-gray-100"
+              title="Search"
             >
-              <Search className="size-3.5 shrink-0" />
-              Search
-            </Button>
+              <Search className="size-4" />
+            </button>
           )}
+        </div>
+      )}
+
+      {/* Rename Table Modal */}
+      {renamingTableId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setRenamingTableId(null);
+              setRenameTableValue("");
+            }
+          }}
+        >
+          <div className="w-80 rounded-xl bg-white p-5 shadow-xl">
+            {/* Table name input */}
+            <input
+              autoFocus
+              value={renameTableValue}
+              onChange={(e) => setRenameTableValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { setRenamingTableId(null); setRenameTableValue(""); }
+                if (e.key === "Enter") {
+                  const trimmed = renameTableValue.trim();
+                  if (!trimmed) return;
+                  renameTable.mutate({ tableId: renamingTableId, tableName: trimmed });
+                  setRenamingTableId(null);
+                  setRenameTableValue("");
+                }
+              }}
+              className="w-full rounded-md border border-emerald-600 px-3 py-1.5 text-[13px] text-gray-900 outline-none ring-1 ring-emerald-600"
+            />
+
+            {/* Record name label */}
+            <div className="mt-4 flex items-center gap-1.5 text-[13px] text-gray-500">
+              What should each record be called?
+              <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-gray-300">
+                <span className="text-[10px] leading-none text-gray-400">?</span>
+              </div>
+            </div>
+
+            {/* Record name select */}
+            <div className="relative mt-2">
+              <select
+                value={recordTypeName}
+                onChange={(e) => setRecordTypeName(e.target.value)}
+                className="w-full appearance-none rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[13px] text-gray-800 outline-none"
+              >
+                <option>Record</option>
+                <option>Row</option>
+                <option>Item</option>
+                <option>Entry</option>
+                <option>Contact</option>
+                <option>Task</option>
+                <option>Event</option>
+              </select>
+              <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M4 6l4 4 4-4" />
+              </svg>
+            </div>
+
+            {/* Examples */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-gray-400">
+              <span>Examples:</span>
+              <span className="flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="8" y1="3" x2="8" y2="13" />
+                  <line x1="3" y1="8" x2="13" y2="8" />
+                </svg>
+                Add {recordTypeName.toLowerCase()}
+              </span>
+              <span className="flex items-center gap-1">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="1" y="3" width="14" height="10" rx="1" />
+                  <path d="M1 6l7 4 7-4" />
+                </svg>
+                Send {recordTypeName.toLowerCase()}s
+              </span>
+            </div>
+
+            {/* Buttons */}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => { setRenamingTableId(null); setRenameTableValue(""); }}
+                className="rounded-md px-4 py-1.5 text-[13px] font-medium text-gray-600 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const trimmed = renameTableValue.trim();
+                  if (!trimmed) return;
+                  renameTable.mutate({ tableId: renamingTableId, tableName: trimmed });
+                  setRenamingTableId(null);
+                  setRenameTableValue("");
+                }}
+                disabled={!renameTableValue.trim() || renameTable.isPending}
+                className="rounded-md bg-airtable-blue px-4 py-1.5 text-[13px] font-medium text-white hover:bg-airtable-blue/90 disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden bg-white">
         {selectedId ? (
           <>
-            <ViewsSidebar
-              tableId={selectedId}
-              activeViewId={activeViewId}
-              filters={filters}
-              groupByColumnId={groupByColumnId}
-              onSelectView={handleSelectView}
-            />
+            {showSidebar && (
+              <ViewsSidebar
+                tableId={selectedId}
+                activeViewId={activeViewId}
+                filterGroup={filterGroup}
+                groupByColumnId={groupByColumnId}
+                sortConfig={sortConfig}
+                hiddenFieldIds={hiddenFieldIds}
+                color={viewColor}
+                onSelectView={handleSelectView}
+              />
+            )}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <TableGrid
                 tableId={selectedId}
                 groupByColumnId={groupByColumnId}
-                filters={filters}
+                filterGroup={filterGroup}
                 searchQuery={searchQuery}
                 hiddenFieldIds={hiddenFieldIds}
                 sortConfig={sortConfig}
+                onAddingRowChange={setIsAddingRow}
               />
             </div>
           </>

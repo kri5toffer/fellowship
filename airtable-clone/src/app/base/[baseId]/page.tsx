@@ -118,34 +118,18 @@ export default function BasePage({
 
             {/* Primary tabs: Data, Automations, Interfaces, Forms - centered */}
             <div className="flex flex-1 items-center justify-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto border-b-2 border-airtable-text-primary px-3 py-2 text-[13px] font-medium text-airtable-text-primary"
-              >
+              <button className="border-b-2 border-b-gray-900 px-3 py-2 text-[13px] font-semibold text-gray-900">
                 Data
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-3 py-2 text-[13px] font-medium text-airtable-text-secondary hover:text-airtable-text-primary"
-              >
+              </button>
+              <button className="px-3 py-2 text-[13px] font-medium text-airtable-text-secondary hover:text-airtable-text-primary">
                 Automations
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-3 py-2 text-[13px] font-medium text-airtable-text-secondary hover:text-airtable-text-primary"
-              >
+              </button>
+              <button className="px-3 py-2 text-[13px] font-medium text-airtable-text-secondary hover:text-airtable-text-primary">
                 Interfaces
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-3 py-2 text-[13px] font-medium text-airtable-text-secondary hover:text-airtable-text-primary"
-              >
+              </button>
+              <button className="px-3 py-2 text-[13px] font-medium text-airtable-text-secondary hover:text-airtable-text-primary">
                 Forms
-              </Button>
+              </button>
             </div>
 
             {/* Right section: Trial, Launch, Share */}

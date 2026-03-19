@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: var(--font-inter), -apple-system, system-ui, "system-ui", "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 
   /* Airtable brand colors */
   --color-airtable-navy: #172b4d;
@@ -20,19 +20,19 @@
   --color-airtable-green: #20c933;
   --color-airtable-cyan: #18bfff;
 
-  /* UI colors */
-  --color-airtable-row-hover: #f8fafd;
+  /* UI colors — sourced from live Airtable DevTools inspection */
+  --color-airtable-row-hover: #f5f7ff;
   --color-airtable-row-selected: #e8f0fe;
-  --color-airtable-border: #dde1e6;
-  --color-airtable-border-light: #e8ecf0;
-  --color-airtable-header-bg: #f4f4f4;
+  --color-airtable-border: #dde1e3;
+  --color-airtable-border-light: #e8eaec;
+  --color-airtable-header-bg: #ffffff;
   --color-airtable-sidebar-bg: #f8f8f8;
   --color-airtable-toolbar-bg: #ffffff;
 
-  /* Text colors */
-  --color-airtable-text-primary: #333333;
-  --color-airtable-text-secondary: #666666;
-  --color-airtable-text-muted: #999999;
+  /* Text colors — primary sourced from live body color rgb(29,31,37) */
+  --color-airtable-text-primary: #1d1f25;
+  --color-airtable-text-secondary: #6f6f6f;
+  --color-airtable-text-muted: #8c8c8c;
 }
 
 :root {
