@@ -54,42 +54,64 @@ export default function BasePage({
     <main className="flex min-h-screen flex-col bg-white">
       <div className="flex flex-1">
         {/* Left sidebar - Airtable style */}
-        <aside className="flex w-12 shrink-0 flex-col items-center self-stretch border-r border-airtable-border bg-white py-3">
-          <Link
-            href="/"
-            title="All bases"
-            className="inline-flex size-8 items-center justify-center rounded-lg text-airtable-text-secondary transition-colors hover:bg-gray-200 hover:text-airtable-text-primary"
-          >
-            <Boxes className="size-5 text-airtable-text-primary" />
-          </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mt-2 text-airtable-text-muted hover:bg-gray-200 hover:text-airtable-text-secondary"
-            title="Settings"
-          >
-            <Settings className="size-5" />
-          </Button>
-
-          {/* Three icons - help, bell, avatar - in left column */}
-          <div className="mt-auto flex flex-col items-center gap-3 pt-6">
+        <aside
+          className="shrink-0 bg-white"
+          style={{
+            position: "sticky",
+            top: 0,
+            width: "56px",
+            height: "100vh",
+            padding: "1rem 0.5rem",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            borderRight: "1px solid rgba(0,0,0,0.1)",
+            boxSizing: "border-box",
+            zIndex: 10,
+          }}
+        >
+          {/* Top icons */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+            <Link
+              href="/"
+              title="All bases"
+              className="inline-flex items-center justify-center rounded-lg text-[rgb(29,31,37)] transition-colors hover:bg-[rgb(242,244,248)]"
+              style={{ height: "28px", width: "28px" }}
+            >
+              <Boxes className="size-4" />
+            </Link>
             <button
               type="button"
-              className="flex size-9 items-center justify-center rounded-lg border-2 border-airtable-blue bg-white text-airtable-text-muted hover:text-airtable-text-primary"
+              className="inline-flex items-center justify-center rounded-lg text-[rgb(97,102,112)] transition-colors hover:bg-[rgb(242,244,248)] hover:text-[rgb(29,31,37)]"
+              style={{ height: "28px", width: "28px" }}
+              title="Settings"
+            >
+              <Settings className="size-4" />
+            </button>
+          </div>
+
+          {/* Bottom icons */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full text-[rgb(97,102,112)] transition-colors hover:bg-[rgb(242,244,248)] hover:text-[rgb(29,31,37)]"
+              style={{ height: "28px", width: "28px" }}
               title="Help"
             >
               <HelpCircle className="size-4" />
             </button>
             <button
               type="button"
-              className="flex size-9 items-center justify-center rounded-lg text-airtable-text-muted hover:bg-gray-100 hover:text-airtable-text-primary"
+              className="inline-flex items-center justify-center rounded-full text-[rgb(97,102,112)] transition-colors hover:bg-[rgb(242,244,248)] hover:text-[rgb(29,31,37)]"
+              style={{ height: "28px", width: "28px" }}
               title="Notifications"
             >
               <Bell className="size-4" />
             </button>
             <button
               type="button"
-              className="flex size-8 items-center justify-center rounded-full bg-airtable-teal text-sm font-medium text-white hover:opacity-90"
+              className="inline-flex items-center justify-center rounded-full bg-teal-500 text-[13px] font-semibold text-white hover:opacity-90"
+              style={{ height: "28px", width: "28px", boxShadow: "0 2px 4px rgba(0,0,0,0.2)", border: "2px solid white" }}
               title="User"
             >
               C

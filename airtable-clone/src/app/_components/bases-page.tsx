@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Plus, Home, Star, Share2, Users, BookOpen, ShoppingBag, Upload,
   ChevronDown, ChevronRight, Search, HelpCircle, Bell, Sparkles,
-  LayoutGrid, ArrowUp, AlignJustify, X, List, Grid3X3,
+  LayoutGrid, ArrowUp, AlignJustify, X,
   MoreHorizontal, Edit, Copy, ArrowRight, UserPlus, Palette, Trash2,
 } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -157,7 +157,18 @@ export function BasesPage() {
               className="flex items-center rounded pl-0.5 pr-1 py-1 text-[rgb(29,31,37)] hover:opacity-70"
               aria-label="Collapse sidebar"
             >
-              <List className="size-5" />
+              <svg 
+                width="20" 
+                height="20" 
+                viewBox="0 0 20 20" 
+                fill="none" 
+                xmlns="http://www.w3.org/2000/svg"
+                className="size-5"
+              >
+                <line x1="3" y1="6" x2="17" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="3" y1="14" x2="17" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </button>
             <Link href="/" className="flex items-center rounded p-[6px] mr-0.5 focus-visible:outline-none">
               <svg width="102" height="22.2" viewBox="0 0 680 148" xmlns="http://www.w3.org/2000/svg" style={{ shapeRendering: "geometricPrecision" }}>
@@ -488,7 +499,18 @@ export function BasesPage() {
                     aria-checked="false"
                     aria-label="View items in a list"
                   >
-                    <List className="size-5 flex-none" />
+                    <svg 
+                      width="20" 
+                      height="20" 
+                      viewBox="0 0 20 20" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="size-5 flex-none"
+                    >
+                      <line x1="3" y1="6" x2="17" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <line x1="3" y1="14" x2="17" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -498,7 +520,19 @@ export function BasesPage() {
                     aria-checked="true"
                     aria-label="View items in a grid"
                   >
-                    <Grid3X3 className="size-5 flex-none" />
+                    <svg 
+                      width="20" 
+                      height="20" 
+                      viewBox="0 0 20 20" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="size-5 flex-none"
+                    >
+                      <rect x="4" y="4" width="4.5" height="4.5" stroke="currentColor" strokeWidth="1.5" rx="1"/>
+                      <rect x="11.5" y="4" width="4.5" height="4.5" stroke="currentColor" strokeWidth="1.5" rx="1"/>
+                      <rect x="4" y="11.5" width="4.5" height="4.5" stroke="currentColor" strokeWidth="1.5" rx="1"/>
+                      <rect x="11.5" y="11.5" width="4.5" height="4.5" stroke="currentColor" strokeWidth="1.5" rx="1"/>
+                    </svg>
                   </button>
                 </div>
               </div>
