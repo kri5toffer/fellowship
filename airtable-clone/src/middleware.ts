@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check for session token (next-auth cookie)
-  const token = request.cookies.get("authjs.session-token") || 
+  const token = request.cookies.get("authjs.session-token") ?? 
                 request.cookies.get("__Secure-authjs.session-token");
 
   // If no token, redirect to login
