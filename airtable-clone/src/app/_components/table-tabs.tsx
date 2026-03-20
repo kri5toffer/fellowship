@@ -22,7 +22,6 @@ import { TableGrid } from "./table-grid";
 import { FilterBar, type FilterGroup, createEmptyFilterGroup, migrateFilters } from "./filter-bar";
 import { HideFieldsPanel } from "./hide-fields-panel";
 import { ViewsSidebar } from "./views-sidebar";
-import { UserButton } from "./user-button";
 import { Button } from "~/components/ui/button";
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -226,38 +225,64 @@ export function TableTabs({ baseId }: { baseId: string }) {
       {/* Table tabs bar */}
       <nav
         aria-label="Tables"
-        className="flex flex-none items-center border-b border-gray-200 bg-[#f3e8ff] px-2"
-        style={{ height: 40 }}
+        className="scrollbar-hidden flex flex-none items-center overflow-auto"
+        style={{
+          height: 32,
+          backgroundColor: "#f4f6f9",
+          paddingLeft: 4,
+          fontSize: 13,
+        }}
       >
         <div className="flex min-w-0 flex-1 items-center">
-          {tableList.map((t, idx) => (
-            <div key={t.id} className="relative flex items-center">
-              {idx > 0 && (
-                <span className="select-none px-0.5 text-[13px] text-gray-300">|</span>
-              )}
+          {tableList.map((t) => {
+            const isActive = t.id === selectedId;
 
-              <button
-                onClick={() => handleTableSwitch(t.id)}
-                className={`flex items-center gap-1 rounded px-2.5 py-1 text-[13px] transition-colors ${
-                  t.id === selectedId
-                    ? "font-semibold text-gray-900"
-                    : "font-normal text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                }`}
+            return (
+              <div
+                key={t.id}
+                className="relative flex items-center"
+                style={
+                  isActive
+                    ? {
+                        backgroundColor: "#d9e2f5",
+                        borderRadius: 6,
+                        height: 24,
+                        position: "relative",
+                      }
+                    : {
+                        height: 24,
+                      }
+                }
               >
-                <span className="truncate max-w-[140px]">{t.tableName}</span>
-                {t.id === selectedId && (
-                  <span
-                    role="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTableMenuId(tableMenuId === t.id ? null : t.id);
-                    }}
-                    className="flex items-center"
-                  >
-                    <ChevronDown className="size-3.5 shrink-0 text-gray-500" />
-                  </span>
-                )}
-              </button>
+                <button
+                  onClick={() => handleTableSwitch(t.id)}
+                  className="flex h-full flex-auto select-none items-center transition-colors"
+                  style={{
+                    maxWidth: "32rem",
+                    paddingLeft: 12,
+                    paddingRight: isActive ? 24 : 12,
+                    outlineOffset: -5,
+                    color: isActive ? "rgb(29, 31, 37)" : "rgb(97, 102, 112)",
+                    fontWeight: isActive ? 500 : 400,
+                    borderRadius: 6,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+                      e.currentTarget.style.borderRadius = "6px";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }
+                  }}
+                >
+                  <span className="truncate whitespace-pre">{t.tableName}</span>
+                  {isActive && (
+                    <ChevronDown className="ml-1 size-3 shrink-0 text-[rgb(97,102,112)]" />
+                  )}
+                </button>
 
               {tableMenuId === t.id && (
                 <div
@@ -383,7 +408,8 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
 
           {/* Add or import */}
           {creatingTable ? (
@@ -417,61 +443,111 @@ export function TableTabs({ baseId }: { baseId: string }) {
           ) : (
             <button
               onClick={() => setCreatingTable(true)}
-              className="ml-1 flex items-center gap-1 rounded px-2 py-1 text-[13px] text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              title="Add table"
+              className="mb-px ml-1 flex items-center gap-1.5 self-center rounded px-2 py-1 text-[13px] font-normal transition-colors"
+              style={{
+                color: "rgb(97, 102, 112)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+                e.currentTarget.style.color = "rgb(29, 31, 37)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "rgb(97, 102, 112)";
+              }}
+              title="Add or import"
             >
               <Plus className="size-3.5 shrink-0" />
+              <span>Add or import</span>
             </button>
           )}
         </div>
 
-        {/* Overflow chevron */}
+        {/* Spacer */}
+        <div className="flex-1" />
+        
+        {/* Tools dropdown */}
         <button
           type="button"
-          className="ml-1 flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100"
-          title="More tables"
+          className="flex items-center gap-1 self-center rounded px-2 py-1 text-[13px] font-normal transition-colors"
+          style={{
+            height: 24,
+            marginRight: 8,
+            color: "rgb(97, 102, 112)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+          }}
+          title="Tools"
         >
-          <ChevronDown className="size-4" />
+          <span>Tools</span>
+          <ChevronDown className="size-3 shrink-0" />
         </button>
-
-        {/* Spacer + User button */}
-        <div className="flex-1" />
-        <UserButton />
       </nav>
 
       {selectedId && (
-        <div className="flex items-center gap-1 border-b border-airtable-border bg-white px-2 py-1.5">
+        <div
+          id="viewBar"
+          role="region"
+          aria-label="View configuration"
+          className="flex flex-none items-center overflow-hidden border-b"
+          style={{
+            height: 48,
+            minWidth: 600,
+            borderColor: "rgba(0,0,0,0.1)",
+          }}
+        >
           {/* Left side: hamburger toggle + Grid view label */}
-          <button
-            type="button"
-            onClick={() => setShowSidebar((v) => !v)}
-            className="rounded p-1 text-airtable-text-muted hover:bg-gray-100 hover:text-airtable-text-primary"
-            title={showSidebar ? "Hide sidebar" : "Show sidebar"}
-          >
-            <Menu className="size-4" />
-          </button>
-          <div className="flex items-center gap-1.5 rounded-sm px-1.5 py-1">
-            <LayoutGrid className="size-4 shrink-0 text-airtable-blue" />
-            <span className="text-[13px] font-medium text-airtable-text-primary">
-              Grid view
-            </span>
-            <ChevronDown className="size-3.5 text-airtable-text-muted" />
+          <div className="flex flex-auto items-center" style={{ paddingLeft: 6, paddingRight: 4 }}>
+            <button
+              type="button"
+              onClick={() => setShowSidebar((v) => !v)}
+              className="mr-0.5 flex items-center justify-center rounded text-[rgb(97,102,112)] hover:bg-[rgba(0,0,0,0.05)]"
+              style={{ width: 28, height: 28 }}
+              title={showSidebar ? "Close sidebar" : "Open sidebar"}
+              aria-label={showSidebar ? "Close sidebar" : "Open sidebar"}
+            >
+              <Menu className="size-4" />
+            </button>
+            <h2 className="flex items-center">
+              <div
+                className="flex cursor-pointer items-center rounded px-1 hover:bg-[rgba(0,0,0,0.05)]"
+                style={{ height: 26, maxWidth: "fit-content" }}
+              >
+                <div className="flex min-w-0 items-center">
+                  <span className="inline-flex flex-none items-center">
+                    <LayoutGrid className="size-4 flex-none text-[rgb(22,110,225)]" />
+                  </span>
+                  <span
+                    className="ml-1 mr-1 flex-auto truncate text-[13px] font-semibold text-[rgb(29,31,37)]"
+                    style={{ maxWidth: 200 }}
+                  >
+                    Grid view
+                  </span>
+                  <ChevronDown className="mt-px size-4 flex-none text-[rgb(29,31,37)]" />
+                </div>
+              </div>
+            </h2>
+
+            {/* Loading indicator for row operations */}
+            {isAddingRow && (
+              <div className="ml-2 flex items-center gap-1.5 text-[12px] text-airtable-text-muted">
+                <svg className="size-3.5 animate-spin text-airtable-blue" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
+                </svg>
+                Saving...
+              </div>
+            )}
           </div>
 
-          {/* Loading indicator for row operations */}
-          {isAddingRow && (
-            <div className="flex items-center gap-1.5 text-[12px] text-airtable-text-muted">
-              <svg className="size-3.5 animate-spin text-airtable-blue" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
-              </svg>
-              Saving...
-            </div>
-          )}
-
-          {/* Spacer - pushes tools to the right */}
-          <div className="flex-1" />
-
-          {/* Tools - right-aligned, order: Hide, Filter, Group, Sort, Color, Share and sync, Search */}
+          {/* Right side: toolbar buttons */}
+          <div className="flex flex-auto items-center justify-end pr-1" style={{ height: "100%" }}>
+            <div className="flex flex-auto items-center justify-end overflow-hidden" style={{ height: "100%" }}>
+              <div className="flex grow items-center justify-end px-1">
+                <div className="flex items-center">
           <HideFieldsPanel
             columns={activeTable?.columns ?? []}
             hiddenFieldIds={hiddenFieldIds}
@@ -763,6 +839,10 @@ export function TableTabs({ baseId }: { baseId: string }) {
               <Search className="size-4" />
             </button>
           )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

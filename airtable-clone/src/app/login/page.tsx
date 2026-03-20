@@ -43,7 +43,7 @@ export default function LoginPage() {
 
           {/* Heading */}
           <h1 className="mb-10 text-[28px] font-bold tracking-tight text-gray-900">
-            Sign in to Lyra
+            Sign in to Airtable
           </h1>
 
           {/* Email field */}
@@ -124,7 +124,7 @@ export default function LoginPage() {
           {/* Footer links */}
           <div className="space-y-3 text-[14px] text-gray-600">
             <p>
-              New to Lyra?{" "}
+              New to Airtable?{" "}
               <button
                 type="button"
                 onClick={() => handleComingSoon("Account creation")}
@@ -147,12 +147,12 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right side — purple promo panel (compact) */}
-      <div className="hidden lg:block lg:w-[32%]">
-        <div className="flex h-full flex-col rounded-l-[2rem] bg-[#2d1b69] px-8 pt-12">
+      {/* Right side — purple promo panel (centered square) */}
+      <div className="hidden lg:flex lg:w-[32%] lg:items-center lg:justify-center">
+        <div className="flex w-full max-w-[500px] flex-col rounded-[2rem] bg-[#2d1b69] p-8" style={{ aspectRatio: "1" }}>
           {/* Promo heading */}
           <h2 className="mb-4 text-[26px] font-bold leading-[1.2] text-white">
-            Meet Lyra, your workspace for building custom apps.
+            Meet Airtable, your workspace for building custom apps.
           </h2>
 
           {/* CTA button */}

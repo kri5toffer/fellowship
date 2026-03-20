@@ -700,7 +700,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
   const tanstackColumns: ColumnDef<FlatRow, string>[] = useMemo(() => {
     const helper = createColumnHelper<FlatRow>();
 
-    return dbColumns.map((col) =>
+    return dbColumns.map((col, colIndex) =>
       helper.accessor((row) => row[col.id] ?? "", {
         id: col.id,
         header: () => (
@@ -727,39 +727,129 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                 }}
                 className="rounded p-0.5 opacity-0 hover:bg-gray-200 group-hover/header:opacity-100"
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-gray-400">
-                  <path d="M8 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                  <path d="M4 6l4 4 4-4" />
                 </svg>
               </button>
               {columnMenuId === col.id && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRenamingColumnId(col.id);
-                      setColumnMenuId(null);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                <ul
+                  role="menu"
+                  className="absolute left-0 top-full z-20 mt-1 bg-white"
+                  style={{
+                    width: 320,
+                    borderRadius: 6,
+                    boxShadow: "0px 0px 1px rgba(0,0,0,0.24), 0px 0px 2px rgba(0,0,0,0.16), 0px 3px 4px rgba(0,0,0,0.06), 0px 6px 8px rgba(0,0,0,0.06), 0px 12px 16px rgba(0,0,0,0.08), 0px 18px 32px rgba(0,0,0,0.06)",
+                    fontFamily: "-apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif",
+                    fontSize: 13,
+                    lineHeight: "18px",
+                    fontWeight: 400,
+                    color: "rgb(29, 31, 37)",
+                    padding: "8px",
+                  }}
+                >
+                  {/* Edit field → triggers rename */}
+                  <li
+                    role="menuitem"
+                    onClick={(e) => { e.stopPropagation(); setRenamingColumnId(col.id); setColumnMenuId(null); }}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]"
                   >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M11 2l3 3-8 8H3v-3L11 2z" />
-                    </svg>
-                    Rename field
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteColumn.mutate({ columnId: col.id });
-                      setColumnMenuId(null);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M11 2l3 3-8 8H3v-3L11 2z" /></svg>
+                    <span className="flex-auto truncate select-none">Edit field</span>
+                  </li>
+                  {/* Duplicate field */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><rect x="5" y="5" width="9" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M2 11V2h9" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Duplicate field</span>
+                  </li>
+                  {/* Insert left */}
+                  <li
+                    role="menuitem"
+                    className={`flex w-full items-center gap-2 rounded-[3px] px-2 py-2 ${colIndex === 0 ? "cursor-default text-[rgb(151,154,160)]" : "cursor-pointer hover:bg-[rgba(0,0,0,0.05)]"}`}
                   >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4" />
-                    </svg>
-                    Delete field
-                  </button>
-                </div>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M7 4H2m0 0l3-3M2 4l3 3M14 8H6M14 12H6" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Insert left</span>
+                  </li>
+                  {/* Insert right */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M9 4h5m0 0l-3-3m3 3l-3 3M2 8h8M2 12h8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Insert right</span>
+                  </li>
+                  {/* Change primary field */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M2 8h12M9 4l5 4-5 4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Change primary field</span>
+                  </li>
+
+                  <li className="my-2 border-t" style={{ borderColor: "rgba(0,0,0,0.1)" }} />
+
+                  {/* Copy field URL */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.5 3.5 0 0 0-5-5L7 4" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.5 3.5 0 0 0 5 5L9 12" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Copy field URL</span>
+                  </li>
+                  {/* Edit field description */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M8 7v4" stroke="currentColor" strokeWidth="1.5" fill="none" /><circle cx="8" cy="5" r="0.75" /></svg>
+                    <span className="flex-auto truncate select-none">Edit field description</span>
+                  </li>
+                  {/* Edit field permissions */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><rect x="3" y="7" width="10" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Edit field permissions</span>
+                  </li>
+
+                  <li className="my-2 border-t" style={{ borderColor: "rgba(0,0,0,0.1)" }} />
+
+                  {/* Sort A → Z */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M2 4h8M2 8h6M2 12h4M11 3v10M8 10l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Sort A → Z</span>
+                  </li>
+                  {/* Sort Z → A */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M2 4h8M2 8h6M2 12h4M11 13V3M8 6l3-3 3 3" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Sort Z → A</span>
+                  </li>
+
+                  <li className="my-2 border-t" style={{ borderColor: "rgba(0,0,0,0.1)" }} />
+
+                  {/* Filter by this field */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M2 4h12M4 8h8M6 12h4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Filter by this field</span>
+                  </li>
+                  {/* Group by this field */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><rect x="1" y="2" width="14" height="4" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" /><rect x="1" y="10" width="14" height="4" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Group by this field</span>
+                  </li>
+                  {/* Show dependencies */}
+                  <li role="menuitem" className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><rect x="1" y="2" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" /><rect x="10" y="9" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M6 4.5h2a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M9 7l1.5 1.5L9 10" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Show dependencies</span>
+                  </li>
+
+                  <li className="my-2 border-t" style={{ borderColor: "rgba(0,0,0,0.1)" }} />
+
+                  {/* Hide field */}
+                  <li
+                    role="menuitem"
+                    className={`flex w-full items-center gap-2 rounded-[3px] px-2 py-2 ${colIndex === 0 ? "cursor-default text-[rgb(151,154,160)]" : "cursor-pointer hover:bg-[rgba(0,0,0,0.05)]"}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" strokeWidth="1.5" /><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.5" /><line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="flex-auto truncate select-none">Hide field</span>
+                  </li>
+                  {/* Delete field — functional */}
+                  <li
+                    role="menuitem"
+                    onClick={(e) => { e.stopPropagation(); deleteColumn.mutate({ columnId: col.id }); setColumnMenuId(null); }}
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-[3px] px-2 py-2 hover:bg-[rgba(0,0,0,0.05)]"
+                    style={{ color: "rgb(177, 15, 65)" }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="flex-none" style={{ shapeRendering: "geometricPrecision" }}><path d="M2 4h12M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4M6.5 7v5M9.5 7v5M3.5 4l.5 9.5a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1L12.5 4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+                    <span className="ml-1 flex-auto truncate select-none">Delete field</span>
+                  </li>
+                </ul>
               )}
             </div>
           </div>
@@ -999,21 +1089,31 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                     className="group"
                     style={{ height: `${ROW_HEIGHT}px` }}
                   >
-                    {/* Row number / checkbox gutter */}
+                    {/* Row number / checkbox / expand gutter */}
                     <td
                       className="sticky left-0 z-[1] border-b border-r border-airtable-border bg-white p-0 text-center text-[11px] text-[#aaaaaa]"
                       style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
                     >
-                      <div className="flex h-full items-center justify-center">
-                        <span className="group-hover:hidden">
-                          {displayRowNum}
-                        </span>
-                        <div className="hidden h-full items-center justify-center group-hover:flex">
+                      <div className="relative flex h-full items-center justify-center">
+                        {/* Row number — hidden on hover */}
+                        <span className="group-hover:hidden">{displayRowNum}</span>
+                        {/* Checkbox — shown on hover */}
+                        <div className="hidden items-center justify-center group-hover:flex">
                           <input
                             type="checkbox"
                             className="h-[14px] w-[14px] cursor-pointer rounded-sm border-[#d0d5dd] text-airtable-blue focus:ring-airtable-blue focus:ring-offset-0"
                           />
                         </div>
+                        {/* Expand button — appears on hover, right side */}
+                        <button
+                          type="button"
+                          title="Expand row"
+                          className="absolute right-0.5 hidden items-center justify-center rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 group-hover:flex"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M10 2h4v4M6 14H2v-4M14 2l-5 5M2 14l5-5" />
+                          </svg>
+                        </button>
                       </div>
                     </td>
                     {row.getVisibleCells().map((cell, colIdx) => {

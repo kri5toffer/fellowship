@@ -6,7 +6,7 @@ import {
   Bell,
   Boxes,
   ChevronDown,
-  Clock,
+
   HelpCircle,
   Settings,
   Share2,
@@ -156,30 +156,49 @@ export default function BasePage({
 
             {/* Right section: Trial, Launch, Share */}
             <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-auto gap-1.5 border-airtable-border bg-white px-3 py-1.5 text-[13px] text-airtable-text-secondary hover:bg-gray-50"
+              <button
+                type="button"
+                className="flex items-center justify-center rounded text-[13px]"
+                style={{
+                  color: "#1D1F25",
+                  backgroundColor: "rgba(0,0,0,0.05)",
+                  margin: "0 8px",
+                  padding: "0 12px",
+                  height: 32,
+                  border: "none",
+                }}
               >
-                <Clock className="size-3.5 text-airtable-text-muted" />
-                Trial: 14 days left
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-auto gap-1.5 border-airtable-border bg-white px-3 py-1.5 text-[13px] text-airtable-text-secondary hover:bg-gray-50"
+                Trial: 5 days left
+              </button>
+              <button
+                type="button"
+                className="flex items-center justify-center gap-1.5 rounded text-[13px]"
+                style={{
+                  color: "#1D1F25",
+                  backgroundColor: "rgba(0,0,0,0.05)",
+                  padding: "0 12px",
+                  height: 32,
+                  border: "none",
+                }}
               >
-                <SquareArrowOutUpRight className="size-3.5 text-airtable-text-muted" />
+                <SquareArrowOutUpRight className="size-3.5" />
                 Launch
                 <ChevronDown className="size-3" />
-              </Button>
-              <Button
-                size="sm"
-                className="h-auto gap-1.5 bg-airtable-purple px-3 py-1.5 text-[13px] font-medium text-white hover:bg-airtable-purple/90"
+              </button>
+              <button
+                type="button"
+                className="flex items-center justify-center gap-1.5 rounded text-[13px] font-medium text-white"
+                style={{
+                  backgroundColor: "rgba(0,0,0,0.05)",
+                  padding: "0 12px",
+                  height: 32,
+                  border: "none",
+                  background: "#8b46ff",
+                }}
               >
                 <Share2 className="size-3.5" />
                 Share
-              </Button>
+              </button>
             </div>
           </header>
 

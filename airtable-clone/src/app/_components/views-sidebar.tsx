@@ -194,28 +194,28 @@ export function ViewsSidebar({
   if (!tableId) return null;
 
   return (
-    <div className="flex w-[218px] shrink-0 flex-col border-r border-airtable-border bg-white">
+    <div className="flex w-[280px] shrink-0 flex-col border-r border-airtable-border bg-white">
       {/* Create new... button */}
-      <div className="border-b border-airtable-border px-3 py-2">
-        <button
-          onClick={() => setShowSaveForm(true)}
-          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-airtable-row-hover"
-        >
+      <div className="px-3 py-2">
+        <div className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-airtable-row-hover cursor-pointer" onClick={() => setShowSaveForm(true)}>
           <Plus className="size-4 shrink-0 text-airtable-text-secondary" />
-          Create new...
-        </button>
+          <span>Create new...</span>
+        </div>
       </div>
 
       {/* Find a view search bar */}
-      <div className="border-b border-airtable-border px-2 py-2">
-        <div className="flex items-center gap-2 rounded-md border border-airtable-border bg-white px-2.5 py-1.5">
-          <Search className="size-3.5 shrink-0 text-airtable-text-muted" />
+      <div className="px-3 py-2">
+        <div className="flex w-full items-center gap-2 rounded px-2 py-1.5">
+          <Search className="size-4 shrink-0 text-airtable-text-secondary" />
           <input
             type="text"
             placeholder="Find a view"
             value={viewSearch}
             onChange={(e) => setViewSearch(e.target.value)}
             className="flex-1 bg-transparent text-[13px] text-airtable-text-primary outline-none placeholder:text-airtable-text-muted"
+            style={{
+              color: "rgb(97, 102, 112)",
+            }}
           />
           <button
             type="button"
