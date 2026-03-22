@@ -529,6 +529,12 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
     row: number;
     col: number;
   } | null>(null);
+  const [rowContextMenu, setRowContextMenu] = useState<{
+    rowId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const rowContextMenuRef = useRef<HTMLDivElement>(null);
 
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -562,6 +568,17 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
       window.removeEventListener("mouseup", onMouseUp);
     };
   }, []);
+
+  useEffect(() => {
+    if (!rowContextMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (rowContextMenuRef.current && !rowContextMenuRef.current.contains(e.target as Node)) {
+        setRowContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [rowContextMenu]);
 
   const startResize = useCallback(
     (colId: string, e: React.MouseEvent) => {
@@ -1093,6 +1110,14 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                     <td
                       className="sticky left-0 z-[1] border-b border-r border-airtable-border bg-white p-0 text-center text-[11px] text-[#aaaaaa]"
                       style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setRowContextMenu({
+                          rowId: row.original._rowId,
+                          x: e.clientX,
+                          y: e.clientY,
+                        });
+                      }}
                     >
                       <div className="relative flex h-full items-center justify-center">
                         {/* Row number — hidden on hover */}
@@ -1221,6 +1246,135 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
           {totalRowCount} record{totalRowCount !== 1 ? "s" : ""}
         </div>
       </div>
+
+      {/* Row right-click context menu */}
+      {rowContextMenu && (
+        <div
+          ref={rowContextMenuRef}
+          className="fixed z-50 w-56 rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+          style={{ top: rowContextMenu.y, left: rowContextMenu.x }}
+        >
+          {/* Ask Omni */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <circle cx="8" cy="8" r="2" />
+              <circle cx="8" cy="2" r="1" />
+              <circle cx="8" cy="14" r="1" />
+              <circle cx="2" cy="8" r="1" />
+              <circle cx="14" cy="8" r="1" />
+            </svg>
+            Ask Omni
+          </button>
+
+          <div className="my-1.5 border-t border-gray-100" />
+
+          {/* Insert record above */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <path d="M8 12V4M5 7l3-3 3 3" />
+            </svg>
+            Insert record above
+          </button>
+
+          {/* Insert record below */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <path d="M8 4v8M5 9l3 3 3-3" />
+            </svg>
+            Insert record below
+          </button>
+
+          <div className="my-1.5 border-t border-gray-100" />
+
+          {/* Duplicate record */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <rect x="5" y="5" width="9" height="9" rx="1" />
+              <path d="M2 11V2h9" />
+            </svg>
+            Duplicate record
+          </button>
+
+          {/* Apply template */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
+              <path d="M10 2v3h3" />
+              <path d="M5 8h6M5 11h4" />
+            </svg>
+            Apply template
+          </button>
+
+          {/* Expand record */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-500">
+              <path d="M10 2h4v4M6 14H2v-4M14 2l-5 5M2 14l5-5" />
+            </svg>
+            Expand record
+          </button>
+
+          {/* Run field agent */}
+          <button className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <span className="flex items-center gap-2.5">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                <circle cx="8" cy="8" r="5" />
+                <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+              </svg>
+              Run field agent
+            </span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-400">
+              <path d="M6 4l4 4-4 4" />
+            </svg>
+          </button>
+
+          <div className="my-1.5 border-t border-gray-100" />
+
+          {/* Add comment */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <path d="M2 3h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5l-3 3V4a1 1 0 0 1 1-1z" />
+            </svg>
+            Add comment
+          </button>
+
+          {/* Copy record URL */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <path d="M6.5 9.5a3 3 0 0 0 4.2.3l2-2a3 3 0 0 0-4.2-4.3l-1.1 1.1" />
+              <path d="M9.5 6.5a3 3 0 0 0-4.2-.3l-2 2a3 3 0 0 0 4.2 4.3l1.1-1.1" />
+            </svg>
+            Copy record URL
+          </button>
+
+          {/* Send record */}
+          <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+              <rect x="1" y="3" width="14" height="10" rx="1.5" />
+              <path d="M1 4.5l7 4.5 7-4.5" />
+            </svg>
+            Send record
+          </button>
+
+          <div className="my-1.5 border-t border-gray-100" />
+
+          {/* Delete record — functional */}
+          <button
+            onClick={() => {
+              deleteRow.mutate({ rowId: rowContextMenu.rowId });
+              setRowContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-700 hover:bg-red-50"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+              <path d="M2 4h12" />
+              <path d="M5 4V2h6v2" />
+              <path d="M6 7v5M10 7v5" />
+              <path d="M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9" />
+            </svg>
+            Delete record
+          </button>
+        </div>
+      )}
     </div>
   );
 }

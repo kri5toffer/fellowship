@@ -214,6 +214,7 @@ const RenameColumnInput = z.object({
 const AddBulkRowsInput = z.object({
   tableId: z.string(),
   count: z.number().min(1).max(200_000).default(100_000),
+  sequential: z.boolean().optional(),
 });
 
 const DeleteTableInput = z.object({
@@ -510,7 +511,7 @@ export const tableRouter = createTRPCRouter({
   addBulkRows: publicProcedure
     .input(AddBulkRowsInput)
     .mutation(async ({ ctx, input }) => {
-      const { tableId, count } = input;
+      const { tableId, count, sequential } = input;
 
       // Verify table exists
       const table = await ctx.db.table.findUnique({
@@ -556,11 +557,13 @@ export const tableRouter = createTRPCRouter({
             select: { id: true },
           });
 
-          const cellData = createdRows.flatMap((row) =>
+          const cellData = createdRows.flatMap((row, rowIdx) =>
             columns.map((col) => ({
               rowId: row.id,
               columnId: col.id,
-              cellValue: generateFakeValue(col.fieldType),
+              cellValue: sequential
+                ? String(i + rowIdx + 1)
+                : generateFakeValue(col.fieldType),
             })),
           );
 

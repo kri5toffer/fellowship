@@ -131,7 +131,13 @@ export default function BasePage({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-auto shrink-0 gap-1 px-2 py-1 text-[13px] font-medium text-airtable-text-primary hover:bg-gray-100"
+                className="h-auto shrink-0 gap-1 px-2 py-1 text-airtable-text-primary hover:bg-gray-100"
+                style={{
+                  fontSize: 17,
+                  fontWeight: 675,
+                  letterSpacing: "-0.16px",
+                  lineHeight: "24px",
+                }}
               >
                 {base.baseName}
                 <ChevronDown className="size-3" />

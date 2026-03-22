@@ -54,7 +54,16 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [recordTypeName, setRecordTypeName] = useState("Record");
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showAddImportMenu, setShowAddImportMenu] = useState(false);
+  const [addImportMenuPos, setAddImportMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [showTableSwitcher, setShowTableSwitcher] = useState(false);
+  const [tableSwitcherPos, setTableSwitcherPos] = useState<{ top: number; left: number } | null>(null);
+  const [tableSwitcherSearch, setTableSwitcherSearch] = useState("");
   const tableMenuRef = useRef<HTMLDivElement>(null);
+  const addImportMenuRef = useRef<HTMLDivElement>(null);
+  const addImportBtnRef = useRef<HTMLButtonElement>(null);
+  const tableSwitcherRef = useRef<HTMLDivElement>(null);
+  const tableSwitcherBtnRef = useRef<HTMLButtonElement>(null);
 
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
@@ -108,6 +117,29 @@ export function TableTabs({ baseId }: { baseId: string }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [tableMenuId]);
+
+  useEffect(() => {
+    if (!showAddImportMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (addImportMenuRef.current && !addImportMenuRef.current.contains(e.target as Node)) {
+        setShowAddImportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAddImportMenu]);
+
+  useEffect(() => {
+    if (!showTableSwitcher) return;
+    const handler = (e: MouseEvent) => {
+      if (tableSwitcherRef.current && !tableSwitcherRef.current.contains(e.target as Node)) {
+        setShowTableSwitcher(false);
+        setTableSwitcherSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showTableSwitcher]);
 
   const handleSelectView = (view: {
     id: string | null;
@@ -178,6 +210,13 @@ export function TableTabs({ baseId }: { baseId: string }) {
     },
     onSettled: () => { void utils.table.getAll.invalidate({ baseId }); },
     onSuccess: () => { /* form already closed optimistically */ },
+  });
+
+  const addBulkRows = api.table.addBulkRows.useMutation({
+    onSuccess: () => {
+      void utils.table.getRows.invalidate({ tableId: selectedId ?? "" });
+      void utils.table.getById.invalidate({ id: selectedId ?? "" });
+    },
   });
 
   const updateView = api.view.update.useMutation({
@@ -411,6 +450,128 @@ export function TableTabs({ baseId }: { baseId: string }) {
             );
           })}
 
+          {/* Table switcher dropdown */}
+          <div className="self-center">
+            <button
+              ref={tableSwitcherBtnRef}
+              onClick={() => {
+                if (showTableSwitcher) {
+                  setShowTableSwitcher(false);
+                  setTableSwitcherSearch("");
+                } else {
+                  const rect = tableSwitcherBtnRef.current?.getBoundingClientRect();
+                  if (rect) setTableSwitcherPos({ top: rect.bottom + 2, left: rect.left });
+                  setShowTableSwitcher(true);
+                }
+              }}
+              className="ml-0.5 flex h-5 w-5 items-center justify-center rounded transition-colors"
+              style={{ color: "rgb(97, 102, 112)" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+                e.currentTarget.style.color = "rgb(29, 31, 37)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "rgb(97, 102, 112)";
+              }}
+              title="Switch table"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
+
+            {showTableSwitcher && tableSwitcherPos && (
+              <div
+                ref={tableSwitcherRef}
+                className="fixed z-50 w-72 rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+                style={{ top: tableSwitcherPos.top, left: tableSwitcherPos.left }}
+              >
+                {/* Search */}
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <Search className="size-3.5 shrink-0 text-gray-400" />
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Find a table"
+                    value={tableSwitcherSearch}
+                    onChange={(e) => setTableSwitcherSearch(e.target.value)}
+                    className="w-full text-[13px] text-airtable-text-primary outline-none placeholder:text-gray-400"
+                  />
+                </div>
+
+                <div className="my-1 border-t border-gray-100" />
+
+                {/* Table list */}
+                <div className="max-h-60 overflow-y-auto py-0.5">
+                  {tableList
+                    .filter((t) =>
+                      t.tableName.toLowerCase().includes(tableSwitcherSearch.toLowerCase()),
+                    )
+                    .map((t) => {
+                      const isActive = t.id === selectedId;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            handleTableSwitch(t.id);
+                            setShowTableSwitcher(false);
+                            setTableSwitcherSearch("");
+                          }}
+                          className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] ${
+                            isActive
+                              ? "bg-gray-100 font-medium text-airtable-text-primary"
+                              : "text-airtable-text-primary hover:bg-gray-50"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2.5">
+                            {isActive ? (
+                              <Check className="size-3.5 shrink-0 text-airtable-text-primary" />
+                            ) : (
+                              <span className="size-3.5 shrink-0" />
+                            )}
+                            {t.tableName}
+                          </span>
+                          {isActive && (
+                            <div className="flex items-center gap-1">
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400 hover:text-gray-600">
+                                <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
+                                <circle cx="8" cy="8" r="2" />
+                                <line x1="2" y1="2" x2="14" y2="14" />
+                              </svg>
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-gray-400 hover:text-gray-600">
+                                <circle cx="8" cy="4" r="1.2" />
+                                <circle cx="8" cy="8" r="1.2" />
+                                <circle cx="8" cy="12" r="1.2" />
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+
+                <div className="my-1 border-t border-gray-100" />
+
+                {/* Add table */}
+                <button
+                  onClick={() => {
+                    setShowTableSwitcher(false);
+                    setTableSwitcherSearch("");
+                    setCreatingTable(true);
+                  }}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Plus className="size-3.5 shrink-0 text-gray-500" />
+                    Add table
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-400">
+                    <path d="M6 4l4 4-4 4" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Add or import */}
           {creatingTable ? (
             <form
@@ -441,25 +602,182 @@ export function TableTabs({ baseId }: { baseId: string }) {
               </button>
             </form>
           ) : (
-            <button
-              onClick={() => setCreatingTable(true)}
-              className="mb-px ml-1 flex items-center gap-1.5 self-center rounded px-2 py-1 text-[13px] font-normal transition-colors"
-              style={{
-                color: "rgb(97, 102, 112)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-                e.currentTarget.style.color = "rgb(29, 31, 37)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.color = "rgb(97, 102, 112)";
-              }}
-              title="Add or import"
-            >
-              <Plus className="size-3.5 shrink-0" />
-              <span>Add or import</span>
-            </button>
+            <div className="self-center">
+              <button
+                ref={addImportBtnRef}
+                onClick={() => {
+                  if (showAddImportMenu) {
+                    setShowAddImportMenu(false);
+                  } else {
+                    const rect = addImportBtnRef.current?.getBoundingClientRect();
+                    if (rect) setAddImportMenuPos({ top: rect.bottom + 2, left: rect.left });
+                    setShowAddImportMenu(true);
+                  }
+                }}
+                className="mb-px ml-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
+                style={{ color: "rgb(97, 102, 112)" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+                  e.currentTarget.style.color = "rgb(29, 31, 37)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = "rgb(97, 102, 112)";
+                }}
+                title="Add or import"
+              >
+                <Plus className="size-3.5 shrink-0" />
+                <span>Add or import</span>
+              </button>
+
+              {showAddImportMenu && addImportMenuPos && (
+                <div
+                  ref={addImportMenuRef}
+                  className="fixed z-50 w-64 rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+                  style={{ top: addImportMenuPos.top, left: addImportMenuPos.left }}
+                >
+                  {/* Section: Add a blank table */}
+                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Add a blank table</div>
+                  <button
+                    onClick={() => { setShowAddImportMenu(false); setCreatingTable(true); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <rect x="2" y="2" width="12" height="12" rx="2" />
+                      <line x1="8" y1="5" x2="8" y2="11" />
+                      <line x1="5" y1="8" x2="11" y2="8" />
+                    </svg>
+                    Start from scratch
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Section: Build with Omni */}
+                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Build with Omni</div>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <rect x="1" y="3" width="14" height="10" rx="1.5" />
+                      <line x1="1" y1="6" x2="15" y2="6" />
+                      <line x1="5.5" y1="6" x2="5.5" y2="13" />
+                    </svg>
+                    New table
+                  </button>
+                  <button className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <span className="flex items-center gap-2.5">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                        <circle cx="8" cy="8" r="6" />
+                        <path d="M8 5v6M5 8h6" />
+                      </svg>
+                      New table with web data
+                    </span>
+                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Beta</span>
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Section: Seed data */}
+                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Seed data</div>
+                  <button
+                    onClick={() => {
+                      if (!selectedId) return;
+                      setShowAddImportMenu(false);
+                      addBulkRows.mutate({ tableId: selectedId, count: 100_000, sequential: true });
+                    }}
+                    disabled={addBulkRows.isPending || !selectedId}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <path d="M2 4c0-1.1 2.7-2 6-2s6 .9 6 2" />
+                      <path d="M2 4v3c0 1.1 2.7 2 6 2s6-.9 6-2V4" />
+                      <path d="M2 7v3c0 1.1 2.7 2 6 2s6-.9 6-2V7" />
+                      <path d="M2 10v3c0 1.1 2.7 2 6 2s6-.9 6-2v-3" />
+                    </svg>
+                    {addBulkRows.isPending ? "Seeding rows\u2026" : "Seed 100k rows (1\u2013100,000)"}
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  {/* Section: Add from other sources */}
+                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Add from other sources</div>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                      <rect x="1" y="1" width="14" height="14" rx="3" fill="#FCB400" />
+                      <rect x="4" y="4" width="3.5" height="3.5" rx="0.5" fill="white" />
+                      <rect x="8.5" y="4" width="3.5" height="3.5" rx="0.5" fill="white" fillOpacity="0.7" />
+                      <rect x="4" y="8.5" width="3.5" height="3.5" rx="0.5" fill="white" fillOpacity="0.7" />
+                      <rect x="8.5" y="8.5" width="3.5" height="3.5" rx="0.5" fill="white" fillOpacity="0.5" />
+                    </svg>
+                    Airtable base
+                  </button>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                      <path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
+                      <path d="M10 2v3h3" />
+                      <path d="M5 9h6M5 11.5h4" />
+                    </svg>
+                    CSV file
+                  </button>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                      <rect x="1" y="1" width="14" height="14" rx="3" fill="#4285F4" />
+                      <path d="M4 5h8M4 8h8M4 11h5" stroke="white" strokeWidth="1.2" />
+                    </svg>
+                    Google Calendar
+                  </button>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                      <rect x="1" y="1" width="14" height="14" rx="3" fill="#0F9D58" />
+                      <rect x="3.5" y="4" width="9" height="8" rx="0.5" fill="white" />
+                      <line x1="3.5" y1="7" x2="12.5" y2="7" stroke="#0F9D58" strokeWidth="0.8" />
+                      <line x1="3.5" y1="9.5" x2="12.5" y2="9.5" stroke="#0F9D58" strokeWidth="0.8" />
+                      <line x1="7" y1="4" x2="7" y2="12" stroke="#0F9D58" strokeWidth="0.8" />
+                    </svg>
+                    Google Sheets
+                  </button>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                      <rect x="1" y="1" width="14" height="14" rx="3" fill="#217346" />
+                      <text x="4.5" y="12" fill="white" fontSize="9" fontWeight="bold" fontFamily="Arial">X</text>
+                    </svg>
+                    Microsoft Excel
+                  </button>
+                  <button className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <span className="flex items-center gap-2.5">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                        <rect x="1" y="1" width="14" height="14" rx="3" fill="#00A1E0" />
+                        <path d="M5 6c3 0 3 4 6 4" stroke="white" strokeWidth="1.5" fill="none" />
+                      </svg>
+                      Salesforce
+                    </span>
+                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">Business</span>
+                  </button>
+                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                      <rect x="1" y="1" width="14" height="14" rx="3" fill="#0073EA" />
+                      <path d="M5 5h2v6H5zM9 5h2v6H9z" fill="white" />
+                    </svg>
+                    Smartsheet
+                  </button>
+
+                  <div className="my-1.5 border-t border-gray-100" />
+
+                  <button className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <span className="flex items-center gap-2.5">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
+                        <rect x="2" y="2" width="5" height="5" rx="1" />
+                        <rect x="9" y="2" width="5" height="5" rx="1" />
+                        <rect x="2" y="9" width="5" height="5" rx="1" />
+                        <rect x="9" y="9" width="5" height="5" rx="1" />
+                      </svg>
+                      25 more sources...
+                    </span>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-400">
+                      <path d="M6 4l4 4-4 4" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
