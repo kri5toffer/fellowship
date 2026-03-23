@@ -217,6 +217,16 @@ const AddBulkRowsInput = z.object({
   sequential: z.boolean().optional(),
 });
 
+const ReorderRowsInput = z.object({
+  tableId: z.string(),
+  rowIds: z.array(z.string()),
+});
+
+const ReorderColumnsInput = z.object({
+  tableId: z.string(),
+  columnIds: z.array(z.string()),
+});
+
 const DeleteTableInput = z.object({
   tableId: z.string(),
 });
@@ -536,41 +546,36 @@ export const tableRouter = createTRPCRouter({
       });
       let currentOrder = (maxOrder._max.displayOrder ?? -1) + 1;
 
-      const BATCH_SIZE = 1000;
+      // Large batches = fewer round-trips. 5000 rows × columns per batch.
+      const BATCH_SIZE = 5000;
 
       for (let i = 0; i < count; i += BATCH_SIZE) {
         const batchCount = Math.min(BATCH_SIZE, count - i);
 
-        await ctx.db.$transaction(async (tx) => {
-          const rowData = Array.from({ length: batchCount }, (_, j) => ({
-            tableId,
-            displayOrder: currentOrder + j,
-          }));
+        const rowData = Array.from({ length: batchCount }, (_, j) => ({
+          tableId,
+          displayOrder: currentOrder + j,
+        }));
 
-          await tx.row.createMany({ data: rowData });
-
-          const createdRows = await tx.row.findMany({
-            where: { tableId },
-            orderBy: { displayOrder: "asc" },
-            skip: currentOrder,
-            take: batchCount,
-            select: { id: true },
-          });
-
-          const cellData = createdRows.flatMap((row, rowIdx) =>
-            columns.map((col) => ({
-              rowId: row.id,
-              columnId: col.id,
-              cellValue: sequential
-                ? String(i + rowIdx + 1)
-                : generateFakeValue(col.fieldType),
-            })),
-          );
-
-          if (cellData.length > 0) {
-            await tx.cell.createMany({ data: cellData });
-          }
+        // createManyAndReturn avoids a second findMany to get the IDs back
+        const createdRows = await ctx.db.row.createManyAndReturn({
+          data: rowData,
+          select: { id: true },
         });
+
+        const cellData = createdRows.flatMap((row, rowIdx) =>
+          columns.map((col) => ({
+            rowId: row.id,
+            columnId: col.id,
+            cellValue: sequential
+              ? String(i + rowIdx + 1)
+              : generateFakeValue(col.fieldType),
+          })),
+        );
+
+        if (cellData.length > 0) {
+          await ctx.db.cell.createMany({ data: cellData });
+        }
 
         currentOrder += batchCount;
       }
@@ -596,5 +601,27 @@ export const tableRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: `Table with ID "${input.tableId}" not found` });
       }
       return ctx.db.table.update({ where: { id: input.tableId }, data: { tableName: input.tableName } });
+    }),
+
+  reorderRows: publicProcedure
+    .input(ReorderRowsInput)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(
+        input.rowIds.map((id, idx) =>
+          ctx.db.row.update({ where: { id }, data: { displayOrder: idx } }),
+        ),
+      );
+      return { success: true };
+    }),
+
+  reorderColumns: publicProcedure
+    .input(ReorderColumnsInput)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(
+        input.columnIds.map((id, idx) =>
+          ctx.db.column.update({ where: { id }, data: { displayOrder: idx } }),
+        ),
+      );
+      return { success: true };
     }),
 });

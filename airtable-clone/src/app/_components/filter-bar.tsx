@@ -190,8 +190,18 @@ export function FilterBar({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<FilterGroup>(filterGroup);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
   const activeCount = countConditions(filterGroup);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const PANEL_WIDTH = 560;
+
+  const computePos = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 16));
+    setPanelPos({ top: rect.bottom + 4, left });
+  };
 
   useEffect(() => {
     if (isOpen) setDraft(filterGroup);
@@ -201,7 +211,9 @@ export function FilterBar({
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -288,33 +300,36 @@ export function FilterBar({
   }
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative" ref={wrapperRef}>
       {/* Trigger button */}
       <button
+        ref={triggerRef}
         onClick={() => {
+          computePos();
           if (activeCount === 0 && !isOpen) {
             addCondition();
           } else {
             setIsOpen(!isOpen);
           }
         }}
-        className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] transition-colors ${
+        className={`mr-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] leading-[18px] transition-colors ${
           activeCount > 0
-            ? "bg-green-100 text-green-700"
-            : "text-airtable-text-secondary hover:bg-gray-100"
+            ? "bg-green-100 font-medium text-green-700"
+            : "font-normal text-airtable-text-secondary hover:bg-[#f2f4f8]"
         }`}
       >
         <svg
-          width="14"
-          height="14"
+          width="16"
+          height="16"
           viewBox="0 0 16 16"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.5"
+          className="shrink-0"
         >
           <path d="M1 2h14l-5 6v5l-4 2V8L1 2z" />
         </svg>
-        Filter
+        <span className="truncate">Filter</span>
         {activeCount > 0 && (
           <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-green-600 px-1 text-[10px] font-bold text-white">
             {activeCount}
@@ -323,8 +338,11 @@ export function FilterBar({
       </button>
 
       {/* Panel */}
-      {isOpen && (
-        <div className="absolute left-0 top-full z-30 mt-1 w-[680px] rounded-lg border border-gray-200 bg-white shadow-lg">
+      {isOpen && panelPos && (
+        <div
+          className="fixed z-[200] w-[560px] rounded-lg border border-gray-200 bg-white shadow-lg"
+          style={{ top: panelPos.top, left: panelPos.left, width: Math.min(PANEL_WIDTH, window.innerWidth - 32) }}
+        >
           {/* Header */}
           <div className="px-4 pb-2 pt-3">
             <h3 className="text-[14px] font-semibold text-gray-900">Filter</h3>

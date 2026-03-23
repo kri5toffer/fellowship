@@ -63,17 +63,18 @@ export function HideFieldsPanel({
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] transition-colors ${
+        className={`mr-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] leading-[18px] transition-colors ${
           hiddenCount > 0
-            ? "bg-blue-100 text-blue-700"
-            : "text-airtable-text-secondary hover:bg-gray-100"
+            ? "bg-blue-100 font-medium text-blue-700"
+            : "font-normal text-airtable-text-secondary hover:bg-[#f2f4f8]"
         }`}
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
           <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
           <circle cx="8" cy="8" r="2" />
+          <line x1="2" y1="2" x2="14" y2="14" />
         </svg>
-        Hide fields
+        <span className="truncate">Hide fields</span>
         {hiddenCount > 0 && (
           <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
             {hiddenCount}

@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Columns,
+  GripVertical,
   LayoutGrid,
   MoreHorizontal,
   Pencil,
   Plus,
   Search,
   Settings,
+  Star,
   Trash2,
 } from "lucide-react";
 import { api } from "~/trpc/react";
@@ -41,7 +43,7 @@ function ViewIcon({
   if (isKanban) {
     return <Columns className={className} style={{ color: "#20c933" }} />;
   }
-  return <LayoutGrid className={`${className} text-airtable-text-secondary`} />;
+  return <LayoutGrid className={`${className} text-[#166ee1]`} />;
 }
 
 export function ViewsSidebar({
@@ -85,6 +87,8 @@ export function ViewsSidebar({
   const [defaultViewLabel, setDefaultViewLabel] = useState("Grid view");
   const [renamingDefault, setRenamingDefault] = useState(false);
   const [menuDefaultOpen, setMenuDefaultOpen] = useState(false);
+  const [dragViewId, setDragViewId] = useState<string | null>(null);
+  const [dropViewTargetId, setDropViewTargetId] = useState<string | null>(null);
 
   const createView = api.view.create.useMutation({
     onMutate: async (variables) => {
@@ -173,6 +177,40 @@ export function ViewsSidebar({
     },
   });
 
+  const reorderViews = api.view.reorder.useMutation({
+    onMutate: async (variables) => {
+      await utils.view.getByTable.cancel({ tableId });
+      const previousViews = utils.view.getByTable.getData({ tableId });
+      utils.view.getByTable.setData({ tableId }, (old) => {
+        if (!old) return old;
+        const viewMap = new Map(old.map((v) => [v.id, v]));
+        return variables.viewIds
+          .map((id) => viewMap.get(id))
+          .filter((v): v is typeof old[0] => !!v);
+      });
+      return { previousViews };
+    },
+    onError: (_err, _variables, context) => {
+      utils.view.getByTable.setData({ tableId }, context?.previousViews);
+    },
+    onSettled: () => {
+      void utils.view.getByTable.invalidate({ tableId });
+    },
+  });
+
+  // Global Esc closes all open menus / forms in this sidebar
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuViewId(null);
+      setMenuDefaultOpen(false);
+      setShowSaveForm(false);
+      setNewViewName("");
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
   const handleSaveNewView = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newViewName.trim()) return;
@@ -196,34 +234,38 @@ export function ViewsSidebar({
   return (
     <div className="flex w-[280px] shrink-0 flex-col border-r border-airtable-border bg-white">
       {/* Create new... button */}
-      <div className="px-3 py-2">
-        <div className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-airtable-row-hover cursor-pointer" onClick={() => setShowSaveForm(true)}>
-          <Plus className="size-4 shrink-0 text-airtable-text-secondary" />
-          <span>Create new...</span>
-        </div>
+      <div style={{ padding: "10px 8px 0" }}>
+        <button
+          type="button"
+          onClick={() => setShowSaveForm(true)}
+          className="flex w-full cursor-pointer items-center rounded-md border-none bg-transparent text-left text-[13px] leading-[22px] text-airtable-text-primary hover:bg-[#f2f4f8]"
+          style={{ height: 32, paddingLeft: 12, paddingRight: 12 }}
+        >
+          <Plus className="mr-2 size-4 shrink-0 text-airtable-text-primary" />
+          <span className="truncate">Create new...</span>
+        </button>
       </div>
 
       {/* Find a view search bar */}
-      <div className="px-3 py-2">
-        <div className="flex w-full items-center gap-2 rounded px-2 py-1.5">
-          <Search className="size-4 shrink-0 text-airtable-text-secondary" />
-          <input
-            type="text"
-            placeholder="Find a view"
-            value={viewSearch}
-            onChange={(e) => setViewSearch(e.target.value)}
-            className="flex-1 bg-transparent text-[13px] text-airtable-text-primary outline-none placeholder:text-airtable-text-muted"
-            style={{
-              color: "rgb(97, 102, 112)",
-            }}
-          />
-          <button
-            type="button"
-            className="rounded p-0.5 text-airtable-text-muted hover:bg-gray-100"
-            title="View options"
-          >
-            <Settings className="size-3.5" />
-          </button>
+      <div style={{ padding: "4px 8px 8px" }}>
+        <div className="relative">
+          <div className="flex w-full items-center">
+            <input
+              type="text"
+              placeholder="Find a view"
+              value={viewSearch}
+              onChange={(e) => setViewSearch(e.target.value)}
+              className="w-full rounded border border-transparent bg-transparent py-1.5 pr-8 pl-7 text-[13px] leading-[18px] text-airtable-text-secondary outline-none placeholder:text-airtable-text-muted focus:border-airtable-blue"
+            />
+            <Search className="absolute left-2 size-3.5 shrink-0 text-airtable-text-secondary" />
+            <button
+              type="button"
+              className="absolute right-1 flex items-center justify-center rounded p-1 text-airtable-text-primary hover:bg-[#f2f4f8]"
+              title="View options"
+            >
+              <Settings className="size-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -269,12 +311,15 @@ export function ViewsSidebar({
           <>
             {/* Grid view (default / All records) */}
             <div
-              className="group relative flex items-center"
+              className={`group relative flex items-center rounded ${
+                activeViewId === null ? "bg-[#e8eaf0]" : "hover:bg-[#f2f4f8]"
+              }`}
+              style={{ height: 36, margin: "0 4px", padding: "0 8px" }}
               onClick={() => setMenuDefaultOpen(false)}
             >
               {renamingDefault ? (
                 <form
-                  className="flex flex-1 items-center px-2 py-1"
+                  className="flex flex-1 items-center px-2"
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (renameViewName.trim()) setDefaultViewLabel(renameViewName.trim());
@@ -300,43 +345,56 @@ export function ViewsSidebar({
                   onClick={() =>
                     onSelectView({ id: null, filters: [], groupByColumnId: null, sortConfig: null, hiddenFieldIds: [], color: null })
                   }
-                  className={`flex flex-1 items-center gap-2 px-3 py-1.5 text-left text-[13px] ${
-                    activeViewId === null
-                      ? "bg-gray-100 font-medium text-airtable-text-primary"
-                      : "text-airtable-text-primary hover:bg-airtable-row-hover"
-                  }`}
+                  className="flex flex-1 items-center gap-2 text-left text-[13px] text-airtable-text-primary"
+                  style={{ height: "100%" }}
                 >
-                  <LayoutGrid className="size-3.5 shrink-0 text-airtable-text-secondary" />
-                  {defaultViewLabel}
+                  <LayoutGrid className="size-4 shrink-0 text-[#166ee1]" />
+                  <span className="min-w-0 flex-1 truncate font-medium leading-[16.25px]">{defaultViewLabel}</span>
                 </button>
               )}
               {!renamingDefault && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuDefaultOpen((v) => !v);
-                    setMenuViewId(null);
-                  }}
-                  className="rounded p-1 opacity-0 hover:bg-gray-200 group-hover:opacity-100"
-                  title="View options"
-                >
-                  <MoreHorizontal className="size-3.5 text-gray-400" />
-                </button>
+                <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuDefaultOpen((v) => !v);
+                      setMenuViewId(null);
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded hover:bg-gray-200"
+                    title="View options"
+                  >
+                    <MoreHorizontal className="size-3.5 text-gray-500" />
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 cursor-grab items-center justify-center rounded hover:bg-gray-200"
+                    title="Drag to reorder"
+                  >
+                    <GripVertical className="size-3.5 text-gray-500" />
+                  </button>
+                </div>
               )}
               {menuDefaultOpen && (
                 <div
-                  className="absolute left-0 top-full z-30 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                  className="absolute left-0 top-full z-30 w-56 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  {/* Add to My favorites — visual only */}
+                  <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                    <Star className="size-3.5 text-gray-500" />
+                    Add to &apos;My favorites&apos;
+                  </button>
+                  <div className="my-1 border-t border-gray-100" />
+                  {/* Rename — functional */}
                   <button
                     onClick={() => {
                       setRenameViewName(defaultViewLabel);
                       setRenamingDefault(true);
                       setMenuDefaultOpen(false);
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
                   >
-                    <Pencil className="size-3.5" />
+                    <Pencil className="size-3.5 text-gray-500" />
                     Rename view
                   </button>
                 </div>
@@ -351,12 +409,40 @@ export function ViewsSidebar({
               filteredViews.map((view: ViewRecord) => (
                 <div
                   key={view.id}
-                  className="group relative flex items-center"
+                  className={`group relative flex items-center rounded ${
+                    dragViewId === view.id ? "opacity-40" : ""
+                  } ${dropViewTargetId === view.id ? "border-t-2 border-t-airtable-blue" : ""} ${
+                    activeViewId === view.id ? "bg-[#e8eaf0]" : "hover:bg-[#f2f4f8]"
+                  }`}
+                  style={{ height: 36, margin: "0 4px", padding: "0 8px" }}
                   onClick={() => setMenuViewId(null)}
+                  onDragOver={(e) => {
+                    if (!dragViewId || dragViewId === view.id) return;
+                    e.preventDefault();
+                    setDropViewTargetId(view.id);
+                  }}
+                  onDragLeave={() => setDropViewTargetId(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (!dragViewId || dragViewId === view.id) {
+                      setDragViewId(null);
+                      setDropViewTargetId(null);
+                      return;
+                    }
+                    const ids = filteredViews.map((v) => v.id);
+                    const fromIdx = ids.indexOf(dragViewId);
+                    const toIdx = ids.indexOf(view.id);
+                    if (fromIdx === -1 || toIdx === -1) return;
+                    ids.splice(fromIdx, 1);
+                    ids.splice(toIdx, 0, dragViewId);
+                    reorderViews.mutate({ tableId, viewIds: ids });
+                    setDragViewId(null);
+                    setDropViewTargetId(null);
+                  }}
                 >
                   {renamingViewId === view.id ? (
                     <form
-                      className="flex flex-1 items-center px-2 py-1"
+                      className="flex flex-1 items-center px-2"
                       onSubmit={(e) => {
                         e.preventDefault();
                         if (renameViewName.trim()) {
@@ -394,49 +480,71 @@ export function ViewsSidebar({
                             color: view.color ?? null,
                           })
                         }
-                        className={`flex flex-1 items-center gap-2 px-3 py-1.5 text-left text-[13px] ${
-                          activeViewId === view.id
-                            ? "bg-gray-100 font-medium text-airtable-text-primary"
-                            : "text-airtable-text-primary hover:bg-airtable-row-hover"
-                        }`}
+                        className="flex flex-1 items-center gap-2 px-3 text-left text-[13px] text-airtable-text-primary"
+                        style={{ height: 32 }}
                       >
                         <ViewIcon viewName={view.viewName} />
-                        <span className="min-w-0 truncate">{view.viewName}</span>
+                        <span className="min-w-0 flex-1 truncate">{view.viewName}</span>
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuViewId(menuViewId === view.id ? null : view.id);
-                          setMenuDefaultOpen(false);
-                        }}
-                        className="rounded p-1 opacity-0 hover:bg-gray-200 group-hover:opacity-100"
-                        title="View options"
-                      >
-                        <MoreHorizontal className="size-3.5 text-gray-400" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuViewId(menuViewId === view.id ? null : view.id);
+                            setMenuDefaultOpen(false);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded hover:bg-gray-200"
+                          title="View options"
+                        >
+                          <MoreHorizontal className="size-3.5 text-gray-500" />
+                        </button>
+                        <button
+                          type="button"
+                          draggable
+                          onDragStart={(e) => {
+                            setDragViewId(view.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", view.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragViewId(null);
+                            setDropViewTargetId(null);
+                          }}
+                          className="flex h-6 w-6 cursor-grab items-center justify-center rounded hover:bg-gray-200 active:cursor-grabbing"
+                          title="Drag to reorder"
+                        >
+                          <GripVertical className="size-3.5 text-gray-500" />
+                        </button>
+                      </div>
                     </>
                   )}
                   {menuViewId === view.id && (
                     <div
-                      className="absolute left-0 top-full z-30 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                      className="absolute left-0 top-full z-30 w-56 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Add to favorites — visual only */}
+                      <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
+                        <Star className="size-3.5 text-gray-500" />
+                        Add to &apos;My favorites&apos;
+                      </button>
+                      <div className="my-1 border-t border-gray-100" />
+                      {/* Rename — functional */}
                       <button
                         onClick={() => {
                           setRenameViewName(view.viewName);
                           setRenamingViewId(view.id);
                           setMenuViewId(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
                       >
-                        <Pencil className="size-3.5" />
+                        <Pencil className="size-3.5 text-gray-500" />
                         Rename view
                       </button>
+                      {/* Delete — functional */}
                       <button
-                        onClick={() => {
-                          deleteView.mutate({ id: view.id });
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                        onClick={() => deleteView.mutate({ id: view.id })}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="size-3.5" />
                         Delete view

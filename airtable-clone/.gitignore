@@ -47,3 +47,6 @@ yarn-error.log*
 
 # generated (Prisma client output)
 /generated
+
+# pixel-match / RALPH scripts (local dev tooling)
+/scripts

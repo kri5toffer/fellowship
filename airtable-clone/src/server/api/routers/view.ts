@@ -38,6 +38,11 @@ const DeleteInput = z.object({
   id: z.string(),
 });
 
+const ReorderInput = z.object({
+  tableId: z.string(),
+  viewIds: z.array(z.string()),
+});
+
 export const viewRouter = createTRPCRouter({
   getByTable: publicProcedure
     .input(GetByTableInput)
@@ -125,5 +130,16 @@ export const viewRouter = createTRPCRouter({
       return ctx.db.view.delete({
         where: { id: input.id },
       });
+    }),
+
+  reorder: publicProcedure
+    .input(ReorderInput)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.$transaction(
+        input.viewIds.map((id, idx) =>
+          ctx.db.view.update({ where: { id }, data: { displayOrder: idx } }),
+        ),
+      );
+      return { success: true };
     }),
 });

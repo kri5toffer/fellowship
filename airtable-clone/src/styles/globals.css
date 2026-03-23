@@ -2,10 +2,21 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* GT Eesti Display — place font files in /public/fonts/ named:
+   GTEestiDisplay-Medium.woff2 and GTEestiDisplay-Medium.woff */
+@font-face {
+  font-family: 'GT Eesti Display';
+  src: url('/fonts/GTEestiDisplay-Medium.woff2') format('woff2'),
+       url('/fonts/GTEestiDisplay-Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: var(--font-inter), -apple-system, system-ui, "system-ui", "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-sans: 'GT Eesti Display', -apple-system, system-ui, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 
   /* Airtable brand colors */
   --color-airtable-navy: #172b4d;
@@ -29,10 +40,17 @@
   --color-airtable-sidebar-bg: #f8f8f8;
   --color-airtable-toolbar-bg: #ffffff;
 
-  /* Text colors — primary sourced from live body color rgb(29,31,37) */
-  --color-airtable-text-primary: #1d1f25;
-  --color-airtable-text-secondary: #6f6f6f;
-  --color-airtable-text-muted: #8c8c8c;
+  /* Text colors — from computed styles extraction */
+  --color-airtable-text-primary: #1d1f25;       /* rgb(29,31,37) — body text, headers */
+  --color-airtable-text-secondary: #616670;     /* rgb(97,102,112) — toolbar labels, row numbers */
+  --color-airtable-text-muted: #979aa0;         /* rgb(151,154,160) — placeholder, empty states */
+
+  /* View sidebar selected state */
+  --color-airtable-view-selected: #e8eaf0;
+  --color-airtable-view-hover: #f2f4f8;
+
+  /* Accent blue — from GridFeature icon fill */
+  --color-airtable-accent-blue: #166ee1;        /* rgb(22,110,225) */
 }
 
 :root {

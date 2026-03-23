@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Plus, Home, Star, Share2, Users, BookOpen, ShoppingBag, Upload,
   ChevronDown, ChevronRight, Search, HelpCircle, Bell, Sparkles,
-  LayoutGrid, ArrowUp, AlignJustify, X,
+  LayoutGrid, ArrowUp, Table, X, Globe,
   MoreHorizontal, Edit, Copy, ArrowRight, UserPlus, Palette, Trash2,
 } from "lucide-react";
 import { api, type RouterOutputs } from "~/trpc/react";
@@ -35,17 +35,17 @@ const ACTION_CARDS = [
     description: "Use AI to build a custom app tailored to your workflow",
   },
   {
-    icon: <LayoutGrid className="size-5" style={{ color: "rgb(22, 110, 225)" }} />,
+    icon: <LayoutGrid className="size-5" style={{ color: "rgb(99, 73, 141)" }} />,
     title: "Start with templates",
     description: "Select a template to get started and customize as you go.",
   },
   {
-    icon: <ArrowUp className="size-5" style={{ color: "rgb(1, 221, 213)" }} />,
+    icon: <ArrowUp className="size-5" style={{ color: "rgb(13, 127, 120)" }} />,
     title: "Quickly upload",
     description: "Easily migrate your existing projects in just a few minutes.",
   },
   {
-    icon: <AlignJustify className="size-5" style={{ color: "rgb(124, 55, 239)" }} />,
+    icon: <Table className="size-5" style={{ color: "rgb(59, 102, 163)" }} />,
     title: "Build an app on your own",
     description: "Start with a blank app and build your ideal workflow.",
   },
@@ -187,12 +187,15 @@ export function BasesPage() {
           <div className="flex justify-center">
             <button
               type="button"
-              className="flex w-[400px] items-center rounded-full bg-white px-[8px] py-[5px] text-[13px]"
-              style={{ boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)" }}
+              className="flex w-[400px] items-center rounded-full bg-white px-[16px] text-[13px]"
+              style={{
+                height: "32px",
+                boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+              }}
             >
-              <Search className="size-4 shrink-0 text-[rgb(97,102,112)]" />
-              <span className="ml-[4px] flex-auto text-left text-[rgb(97,102,112)]">Search...</span>
-              <span className="ml-[4px] text-[rgb(151,154,160)]">⌘ K</span>
+              <Search className="size-4 shrink-0 text-[rgb(97,102,112)]" style={{ flex: "0 0 auto" }} />
+              <span className="ml-[8px] flex-auto text-left text-[13px] leading-[19.5px] text-[rgb(97,102,112)]">Search...</span>
+              <span className="text-[13px] leading-[19.5px] text-[rgb(151,154,160)]">⌘ K</span>
             </button>
           </div>
 
@@ -253,10 +256,11 @@ export function BasesPage() {
             {/* Home — active */}
             <Link
               href="/"
-              className="mb-1 flex items-center rounded-[3px] bg-[#f2f4f8] px-3 text-[15px] font-medium text-[rgb(29,31,37)] hover:bg-[#f2f4f8] no-underline"
+              className="mb-1 flex items-center rounded-[3px] bg-[rgb(242,244,248)] text-[15px] font-medium text-[rgb(29,31,37)] hover:bg-[rgb(242,244,248)] no-underline"
+              style={{ padding: "8px 0 8px 8px", height: "40px" }}
             >
               <Home className="size-5 shrink-0" />
-              <span className="grow truncate py-2 pl-2 leading-[1.5]">Home</span>
+              <span className="grow truncate pl-2 leading-[22.5px]">Home</span>
             </Link>
 
             {/* Starred */}
@@ -264,10 +268,11 @@ export function BasesPage() {
               <button
                 type="button"
                 onClick={() => setStarredOpen(!starredOpen)}
-                className="flex w-full items-center rounded-[3px] px-3 text-[15px] font-medium text-[rgb(29,31,37)] hover:bg-[#f2f4f8]"
+                className="flex w-full items-center rounded-[3px] text-[15px] font-medium text-[rgb(29,31,37)] hover:bg-[rgb(242,244,248)]"
+                style={{ padding: "8px 0 8px 8px", height: "40px" }}
               >
                 <Star className="size-5 shrink-0" />
-                <span className="grow truncate py-2 pl-2 leading-[1.5] text-left">Starred</span>
+                <span className="grow truncate pl-2 leading-[22.5px] text-left">Starred</span>
                 <ChevronDown className={`size-4 text-gray-400 transition-transform ${starredOpen ? "" : "-rotate-90"}`} />
               </button>
               {starredOpen && (
@@ -282,19 +287,21 @@ export function BasesPage() {
             {/* Shared */}
             <a
               href="#"
-              className="mb-1 flex items-center rounded-[3px] px-3 text-[15px] font-medium text-[rgb(29,31,37)] no-underline hover:bg-[#f2f4f8]"
+              className="mb-1 flex items-center rounded-[3px] text-[15px] font-medium text-[rgb(29,31,37)] no-underline hover:bg-[rgb(242,244,248)]"
+              style={{ padding: "8px 0 8px 8px", height: "40px" }}
             >
               <Share2 className="size-5 shrink-0" />
-              <span className="grow truncate py-2 pl-2 leading-[1.5]">Shared</span>
+              <span className="grow truncate pl-2 leading-[22.5px]">Shared</span>
             </a>
 
             {/* Workspaces */}
             <button
               type="button"
-              className="mb-1 flex w-full items-center rounded-[3px] px-3 text-[15px] font-medium text-[rgb(29,31,37)] hover:bg-[#f2f4f8]"
+              className="mb-1 flex w-full items-center rounded-[3px] text-[15px] font-medium text-[rgb(29,31,37)] hover:bg-[rgb(242,244,248)]"
+              style={{ padding: "8px 0 8px 8px", height: "40px" }}
             >
               <Users className="size-5 shrink-0" />
-              <span className="grow truncate py-2 pl-2 leading-[1.5] text-left">Workspaces</span>
+              <span className="grow truncate pl-2 leading-[22.5px] text-left">Workspaces</span>
               <div className="flex items-center gap-0.5 text-gray-400">
                 <Plus className="size-4" />
                 <ChevronRight className="size-4" />
@@ -303,44 +310,32 @@ export function BasesPage() {
           </nav>
 
           {/* Bottom */}
-          <div className="border-t border-[rgba(0,0,0,0.1)] p-3">
-            <a 
-              href="#" 
-              className="mb-1 flex items-center rounded-[3px] px-3 text-[13px] font-normal text-[rgb(29,31,37)] no-underline hover:bg-[#f2f4f8]"
-              style={{
-                height: "32px",
-                paddingLeft: "0.5rem",
-                paddingRight: "0.5rem",
-              }}
+          <div className="p-3" style={{ borderTop: "1px solid rgba(0,0,0,0.1)", marginBottom: "18px" }}>
+            <a
+              href="#"
+              className="mb-1 flex items-center rounded-[3px] text-[13px] leading-[19.5px] font-normal text-[rgb(29,31,37)] no-underline hover:bg-[rgb(242,244,248)]"
+              style={{ height: "32px", padding: "0 8px" }}
             >
               <BookOpen className="size-5 shrink-0" />
-              <span className="grow truncate pl-1">Templates and apps</span>
+              <span className="grow truncate pl-2">Templates and apps</span>
             </a>
-            <a 
-              href="#" 
-              className="mb-1 flex items-center rounded-[3px] px-3 text-[13px] font-normal text-[rgb(29,31,37)] no-underline hover:bg-[#f2f4f8]"
-              style={{
-                height: "32px",
-                paddingLeft: "0.5rem",
-                paddingRight: "0.5rem",
-              }}
+            <a
+              href="#"
+              className="mb-1 flex items-center rounded-[3px] text-[13px] leading-[19.5px] font-normal text-[rgb(29,31,37)] no-underline hover:bg-[rgb(242,244,248)]"
+              style={{ height: "32px", padding: "0 8px" }}
             >
               <ShoppingBag className="size-5 shrink-0" />
-              <span className="grow truncate pl-1">Marketplace</span>
+              <span className="grow truncate pl-2">Marketplace</span>
             </a>
-            <a 
-              href="#" 
-              className="mb-1 flex items-center rounded-[3px] px-3 text-[13px] font-normal text-[rgb(29,31,37)] no-underline hover:bg-[#f2f4f8]"
-              style={{
-                height: "32px",
-                paddingLeft: "0.5rem",
-                paddingRight: "0.5rem",
-              }}
+            <a
+              href="#"
+              className="mb-1 flex items-center rounded-[3px] text-[13px] leading-[19.5px] font-normal text-[rgb(29,31,37)] no-underline hover:bg-[rgb(242,244,248)]"
+              style={{ height: "32px", padding: "0 8px" }}
             >
-              <Upload className="size-5 shrink-0" />
-              <span className="grow truncate pl-1">Import</span>
+              <Globe className="size-5 shrink-0" />
+              <span className="grow truncate pl-2">Import</span>
             </a>
-            <div className="px-1 py-1">
+            <div>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(true)}
@@ -348,12 +343,12 @@ export function BasesPage() {
                 style={{
                   backgroundColor: "rgb(22, 110, 225)",
                   boxShadow: "0px 0px 1px rgba(0, 0, 0, 0.32), 0px 0px 2px rgba(0, 0, 0, 0.08), 0px 1px 3px rgba(0, 0, 0, 0.08)",
-                  paddingLeft: "0.75rem",
-                  paddingRight: "0.75rem",
-                  marginTop: "1rem",
-                  marginBottom: "0.5rem",
+                  padding: "0 8px",
+                  marginTop: "16px",
+                  marginBottom: "8px",
                   height: "32px",
                   fontSize: "13px",
+                  fontWeight: 500,
                   lineHeight: "22px",
                 }}
                 onMouseEnter={(e) => {
@@ -382,10 +377,20 @@ export function BasesPage() {
 
         {/* ── Main content ── */}
         <main 
-          className="flex flex-1 flex-col overflow-y-auto px-[48px] pt-[48px]"
+          className="flex flex-1 flex-col overflow-y-auto px-[48px] pt-[32px]"
           style={{ maxWidth: "1920px", backgroundColor: "rgb(249, 250, 251)" }}
         >
-          <h1 className="mb-[24px] mt-0 text-left text-[27px] font-bold leading-[1.11] text-[rgb(29,31,37)]">
+          <h1
+            className="mt-0 text-left text-[rgb(29,31,37)]"
+            style={{
+              fontSize: "27px",
+              fontWeight: 675,
+              lineHeight: "33.75px",
+              letterSpacing: "-0.16px",
+              paddingBottom: "24px",
+              fontFamily: '"Inter Display", -apple-system, system-ui, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif',
+            }}
+          >
             Home
           </h1>
 
@@ -428,9 +433,9 @@ export function BasesPage() {
           )}
 
           {/* 4 Action cards */}
-          <div className="mb-[40px] flex flex-col">
-            <div className="mb-[40px]">
-              <div className="mt-[4px] flex gap-[8px]">
+          <div className="mb-[24px] flex flex-col">
+            <div>
+              <div className="mt-[4px]" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "16px" }}>
                 {ACTION_CARDS.map((card) => (
                   <div key={card.title}>
                     <button
@@ -449,11 +454,11 @@ export function BasesPage() {
                     >
                       <div className="flex items-center">
                         <div className="flex-none">{card.icon}</div>
-                        <h2 className="ml-[8px] text-[15px] font-bold leading-[1.2] text-[rgb(29,31,37)]">
+                        <h2 className="ml-[8px] text-[15px] leading-[18.75px] text-[rgb(29,31,37)]" style={{ fontWeight: 600 }}>
                           {card.title}
                         </h2>
                       </div>
-                      <p className="mt-[4px] text-left text-[13px] leading-[18.2px] text-[rgb(97,102,112)]">
+                      <p className="mt-[4px] text-left text-[13px] leading-[19.5px] text-[rgb(97,102,112)]">
                         {card.description}
                       </p>
                     </button>
@@ -471,7 +476,7 @@ export function BasesPage() {
               marginBottom: "-10px" 
             }}
           >
-            <div className="relative z-[1] mb-[36px] flex items-center justify-between whitespace-nowrap">
+            <div className="relative z-[1] mb-[16px] flex items-center justify-between whitespace-nowrap">
               <div className="mr-[8px] flex items-center">
                 <div className="mr-[24px] flex items-center">
                   <button 
@@ -482,7 +487,7 @@ export function BasesPage() {
                     aria-haspopup="true"
                   >
                     <div className="mr-[4px]">
-                      <p className="text-[15px] leading-[18.2px] text-[rgb(29,31,37)]">
+                      <p className="text-[15px] leading-[22.5px] text-[rgb(29,31,37)]" style={{ fontWeight: 400 }}>
                         Opened anytime
                       </p>
                     </div>
@@ -576,10 +581,10 @@ export function BasesPage() {
                     {/* Today section */}
                     {todayBases.length > 0 && (
                       <div className="mb-[24px] w-full">
-                        <h4 className="mb-[8px] text-[13px] font-bold leading-[1.2] text-[rgb(97,102,112)]">
+                        <h4 className="mb-[8px] text-[13px] font-medium leading-[16.25px] text-[rgb(97,102,112)]">
                           Today
                         </h4>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(286px, 1fr))", gap: "1rem" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(286px, 1fr))", gap: "16px" }}>
                         {todayBases.map((base) => (
                           <div key={base.id}>
                             {renamingBaseId === base.id ? (
@@ -588,6 +593,7 @@ export function BasesPage() {
                                 style={{
                                   height: "92px",
                                   boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+                                  zIndex: menuOpenId === base.id ? 20 : undefined,
                                 }}
                               >
                                 <div
@@ -603,7 +609,7 @@ export function BasesPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="mr-[8px] flex flex-auto flex-col justify-center text-left pl-[16px]">
+                                <div className="mr-[16px] flex flex-auto flex-col justify-center text-left">
                                   <input
                                     autoFocus
                                     value={renameBaseValue}
@@ -616,23 +622,24 @@ export function BasesPage() {
                                       if (e.key === "Enter" && renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
                                       if (e.key === "Escape") { setRenamingBaseId(null); setRenameBaseValue(""); }
                                     }}
-                                    className="truncate rounded border border-blue-400 px-2 py-1 text-[13px] font-bold leading-[18.2px] text-[rgb(29,31,37)] outline-none"
+                                    className="truncate rounded border border-blue-400 px-2 py-1 text-[13px] font-medium leading-[19.5px] text-[rgb(29,31,37)] outline-none"
                                   />
                                 </div>
                               </div>
                             ) : (
                               <Link
                                 href={`/base/${base.id}`}
-                                className="group relative flex cursor-pointer overflow-hidden rounded-[6px] bg-white transition-shadow hover:shadow-[0px_0px_1px_0px_rgba(0,0,0,0.48),0px_0px_2px_0px_rgba(0,0,0,0.08),0px_2px_4px_0px_rgba(0,0,0,0.12),0px_2px_8px_0px_rgba(0,0,0,0.08)]"
+                                className="group relative flex cursor-pointer rounded-[6px] bg-white transition-shadow hover:shadow-[0px_0px_1px_0px_rgba(0,0,0,0.48),0px_0px_2px_0px_rgba(0,0,0,0.08),0px_2px_4px_0px_rgba(0,0,0,0.12),0px_2px_8px_0px_rgba(0,0,0,0.08)]"
                                 role="region"
                                 aria-label={base.baseName}
                                 style={{
                                   height: "92px",
                                   boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+                                  zIndex: menuOpenId === base.id ? 20 : undefined,
                                 }}
                               >
                                 <div
-                                  className="flex shrink-0 items-center justify-center"
+                                  className="flex shrink-0 items-center justify-center overflow-hidden rounded-l-[6px]"
                                   aria-hidden="true"
                                   style={{ width: "92px", height: "92px", minWidth: "92px" }}
                                 >
@@ -645,22 +652,22 @@ export function BasesPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="mr-[8px] flex flex-auto flex-col justify-center text-left pl-[16px]">
+                                <div className="mr-[16px] flex flex-auto flex-col justify-center text-left">
                                   <div className="flex items-center justify-between">
                                     <div className="flex flex-auto">
                                       <Link
                                         href={`/base/${base.id}`}
                                         className="flex flex-auto flex-grow-0 items-center text-left"
                                       >
-                                        <h3 className="truncate text-[13px] font-bold leading-[18.2px] text-[rgb(29,31,37)]">
+                                        <h3 className="truncate text-[13px] font-medium leading-[19.5px] text-[rgb(29,31,37)]">
                                           {base.baseName}
                                         </h3>
                                       </Link>
                                     </div>
-                                    
+
                                     {/* Menu button and dropdown */}
                                     <div
-                                      className="absolute right-0 top-0 z-[1] mr-[10px] mt-[10px] flex items-center gap-[4px] opacity-0 transition-opacity group-hover:opacity-100"
+                                      className={`absolute right-0 top-0 z-[1] mr-[10px] mt-[10px] flex items-center gap-[4px] transition-opacity ${menuOpenId === base.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                                       data-menu-container
                                     >
                                       <button
@@ -688,7 +695,7 @@ export function BasesPage() {
                                       {/* Dropdown menu */}
                                       {menuOpenId === base.id && (
                                         <div
-                                          className="absolute right-0 top-[32px] z-[100] w-[250px] rounded-[6px] bg-white py-[8px]"
+                                          className="absolute left-0 top-[32px] z-[100] w-[250px] rounded-[6px] bg-white py-[8px]"
                                           style={{
                                             boxShadow: "0px 0px 1px rgba(0, 0, 0, 0.24), 0px 0px 2px rgba(0, 0, 0, 0.16), 0px 3px 4px rgba(0, 0, 0, 0.06), 0px 6px 8px rgba(0, 0, 0, 0.06), 0px 12px 16px rgba(0, 0, 0, 0.08), 0px 18px 32px rgba(0, 0, 0, 0.06)",
                                           }}
@@ -708,41 +715,37 @@ export function BasesPage() {
                                             <span>Rename</span>
                                           </button>
 
-                                          {/* Duplicate - placeholder */}
+                                          {/* Duplicate */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <Copy className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Duplicate</span>
                                           </button>
 
-                                          {/* Move - placeholder */}
+                                          {/* Move */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <ArrowRight className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Move</span>
                                           </button>
 
-                                          {/* Go to workspace - placeholder */}
+                                          {/* Go to workspace */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <UserPlus className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Go to workspace</span>
                                           </button>
 
-                                          {/* Customize appearance - placeholder */}
+                                          {/* Customize appearance */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <Palette className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Customize appearance</span>
@@ -770,9 +773,9 @@ export function BasesPage() {
                                     </div>
                                   </div>
                                   <div className="mt-[4px] flex items-center">
-                                    <div className="truncate text-[11px] leading-[15.4px] text-[rgb(97,102,112)]">
+                                    <div className="truncate text-[11px] leading-[16.5px] text-[rgb(97,102,112)]">
                                       <div className="flex items-center">
-                                        <div 
+                                        <div
                                           className="relative z-[2] truncate"
                                           role="button"
                                           tabIndex={0}
@@ -795,10 +798,10 @@ export function BasesPage() {
                     {/* Past 7 days section */}
                     {past7DaysBases.length > 0 && (
                       <div className="mb-[24px] w-full">
-                        <h4 className="mb-[8px] text-[13px] font-bold leading-[1.2] text-[rgb(97,102,112)]">
+                        <h4 className="mb-[8px] text-[13px] font-medium leading-[16.25px] text-[rgb(97,102,112)]">
                           Past 7 days
                         </h4>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(286px, 1fr))", gap: "1rem" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(286px, 1fr))", gap: "16px" }}>
                         {past7DaysBases.map((base) => (
                           <div key={base.id}>
                             {renamingBaseId === base.id ? (
@@ -807,6 +810,7 @@ export function BasesPage() {
                                 style={{
                                   height: "92px",
                                   boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+                                  zIndex: menuOpenId === base.id ? 20 : undefined,
                                 }}
                               >
                                 <div
@@ -822,7 +826,7 @@ export function BasesPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="mr-[8px] flex flex-auto flex-col justify-center text-left pl-[16px]">
+                                <div className="mr-[16px] flex flex-auto flex-col justify-center text-left">
                                   <input
                                     autoFocus
                                     value={renameBaseValue}
@@ -835,23 +839,24 @@ export function BasesPage() {
                                       if (e.key === "Enter" && renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
                                       if (e.key === "Escape") { setRenamingBaseId(null); setRenameBaseValue(""); }
                                     }}
-                                    className="truncate rounded border border-blue-400 px-2 py-1 text-[13px] font-bold leading-[18.2px] text-[rgb(29,31,37)] outline-none"
+                                    className="truncate rounded border border-blue-400 px-2 py-1 text-[13px] font-medium leading-[19.5px] text-[rgb(29,31,37)] outline-none"
                                   />
                                 </div>
                               </div>
                             ) : (
                               <Link
                                 href={`/base/${base.id}`}
-                                className="group relative flex cursor-pointer overflow-hidden rounded-[6px] bg-white transition-shadow hover:shadow-[0px_0px_1px_0px_rgba(0,0,0,0.48),0px_0px_2px_0px_rgba(0,0,0,0.08),0px_2px_4px_0px_rgba(0,0,0,0.12),0px_2px_8px_0px_rgba(0,0,0,0.08)]"
+                                className="group relative flex cursor-pointer rounded-[6px] bg-white transition-shadow hover:shadow-[0px_0px_1px_0px_rgba(0,0,0,0.48),0px_0px_2px_0px_rgba(0,0,0,0.08),0px_2px_4px_0px_rgba(0,0,0,0.12),0px_2px_8px_0px_rgba(0,0,0,0.08)]"
                                 role="region"
                                 aria-label={base.baseName}
                                 style={{
                                   height: "92px",
                                   boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+                                  zIndex: menuOpenId === base.id ? 20 : undefined,
                                 }}
                               >
                                 <div
-                                  className="flex shrink-0 items-center justify-center"
+                                  className="flex shrink-0 items-center justify-center overflow-hidden rounded-l-[6px]"
                                   aria-hidden="true"
                                   style={{ width: "92px", height: "92px", minWidth: "92px" }}
                                 >
@@ -864,22 +869,22 @@ export function BasesPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="mr-[8px] flex flex-auto flex-col justify-center text-left pl-[16px]">
+                                <div className="mr-[16px] flex flex-auto flex-col justify-center text-left">
                                   <div className="flex items-center justify-between">
                                     <div className="flex flex-auto">
                                       <Link
                                         href={`/base/${base.id}`}
                                         className="flex flex-auto flex-grow-0 items-center text-left"
                                       >
-                                        <h3 className="truncate text-[13px] font-bold leading-[18.2px] text-[rgb(29,31,37)]">
+                                        <h3 className="truncate text-[13px] font-medium leading-[19.5px] text-[rgb(29,31,37)]">
                                           {base.baseName}
                                         </h3>
                                       </Link>
                                     </div>
-                                    
+
                                     {/* Menu button and dropdown */}
                                     <div
-                                      className="absolute right-0 top-0 z-[1] mr-[10px] mt-[10px] flex items-center gap-[4px] opacity-0 transition-opacity group-hover:opacity-100"
+                                      className={`absolute right-0 top-0 z-[1] mr-[10px] mt-[10px] flex items-center gap-[4px] transition-opacity ${menuOpenId === base.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                                       data-menu-container
                                     >
                                       <button
@@ -907,7 +912,7 @@ export function BasesPage() {
                                       {/* Dropdown menu */}
                                       {menuOpenId === base.id && (
                                         <div
-                                          className="absolute right-0 top-[32px] z-[100] w-[250px] rounded-[6px] bg-white py-[8px]"
+                                          className="absolute left-0 top-[32px] z-[100] w-[250px] rounded-[6px] bg-white py-[8px]"
                                           style={{
                                             boxShadow: "0px 0px 1px rgba(0, 0, 0, 0.24), 0px 0px 2px rgba(0, 0, 0, 0.16), 0px 3px 4px rgba(0, 0, 0, 0.06), 0px 6px 8px rgba(0, 0, 0, 0.06), 0px 12px 16px rgba(0, 0, 0, 0.08), 0px 18px 32px rgba(0, 0, 0, 0.06)",
                                           }}
@@ -927,41 +932,37 @@ export function BasesPage() {
                                             <span>Rename</span>
                                           </button>
 
-                                          {/* Duplicate - placeholder */}
+                                          {/* Duplicate */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <Copy className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Duplicate</span>
                                           </button>
 
-                                          {/* Move - placeholder */}
+                                          {/* Move */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <ArrowRight className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Move</span>
                                           </button>
 
-                                          {/* Go to workspace - placeholder */}
+                                          {/* Go to workspace */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <UserPlus className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Go to workspace</span>
                                           </button>
 
-                                          {/* Customize appearance - placeholder */}
+                                          {/* Customize appearance */}
                                           <button
                                             onClick={(e) => e.preventDefault()}
-                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)] opacity-50 cursor-not-allowed"
-                                            disabled
+                                            className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"
                                           >
                                             <Palette className="size-4 text-[rgb(97,102,112)]" />
                                             <span>Customize appearance</span>
@@ -989,9 +990,9 @@ export function BasesPage() {
                                     </div>
                                   </div>
                                   <div className="mt-[4px] flex items-center">
-                                    <div className="truncate text-[11px] leading-[15.4px] text-[rgb(97,102,112)]">
+                                    <div className="truncate text-[11px] leading-[16.5px] text-[rgb(97,102,112)]">
                                       <div className="flex items-center">
-                                        <div 
+                                        <div
                                           className="relative z-[2] truncate"
                                           role="button"
                                           tabIndex={0}

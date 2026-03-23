@@ -6,11 +6,12 @@ import {
   Bell,
   Boxes,
   ChevronDown,
-
+  History,
   HelpCircle,
+  LayoutDashboard,
+  Link2,
   Settings,
   Share2,
-  SquareArrowOutUpRight,
 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { TableTabs } from "~/app/_components/table-tabs";
@@ -160,46 +161,68 @@ export default function BasePage({
               </button>
             </div>
 
-            {/* Right section: Trial, Launch, Share */}
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            {/* Right section: History, Trial, Launch, Link, Share */}
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+              {/* History */}
               <button
                 type="button"
-                className="flex items-center justify-center rounded text-[13px]"
+                className="flex items-center justify-center rounded-full text-[rgb(97,102,112)] transition-colors hover:bg-[rgba(0,0,0,0.06)]"
+                style={{ width: 32, height: 32 }}
+                title="Base history"
+              >
+                <History className="size-[18px]" />
+              </button>
+
+              {/* Trial */}
+              <button
+                type="button"
+                className="flex items-center justify-center rounded-md text-[13px] font-normal text-[rgb(29,31,37)] transition-colors hover:bg-[rgba(0,0,0,0.08)]"
                 style={{
-                  color: "#1D1F25",
                   backgroundColor: "rgba(0,0,0,0.05)",
-                  margin: "0 8px",
                   padding: "0 12px",
                   height: 32,
-                  border: "none",
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  whiteSpace: "nowrap",
                 }}
               >
                 Trial: 5 days left
               </button>
+
+              {/* Launch */}
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 rounded text-[13px]"
+                className="flex items-center justify-center gap-1.5 rounded-md text-[13px] font-normal text-[rgb(29,31,37)] transition-colors hover:bg-[rgba(0,0,0,0.08)]"
                 style={{
-                  color: "#1D1F25",
                   backgroundColor: "rgba(0,0,0,0.05)",
-                  padding: "0 12px",
+                  padding: "0 10px",
                   height: 32,
-                  border: "none",
+                  border: "1px solid rgba(0,0,0,0.1)",
                 }}
               >
-                <SquareArrowOutUpRight className="size-3.5" />
+                <LayoutDashboard className="size-[15px]" />
                 Launch
-                <ChevronDown className="size-3" />
+                <ChevronDown className="size-3 text-[rgb(97,102,112)]" />
               </button>
+
+              {/* Link / publish */}
               <button
                 type="button"
-                className="flex items-center justify-center gap-1.5 rounded text-[13px] font-medium text-white"
+                className="flex items-center justify-center rounded-md text-[rgb(97,102,112)] transition-colors hover:bg-[rgba(0,0,0,0.06)]"
+                style={{ width: 32, height: 32, border: "1px solid rgba(0,0,0,0.1)", backgroundColor: "rgba(0,0,0,0.05)" }}
+                title="Copy link"
+              >
+                <Link2 className="size-[15px]" />
+              </button>
+
+              {/* Share */}
+              <button
+                type="button"
+                className="flex items-center justify-center gap-1.5 rounded-md text-[13px] font-medium text-white transition-colors hover:opacity-90"
                 style={{
-                  backgroundColor: "rgba(0,0,0,0.05)",
-                  padding: "0 12px",
+                  background: "#8c3f78",
+                  padding: "0 14px",
                   height: 32,
                   border: "none",
-                  background: "#8b46ff",
                 }}
               >
                 <Share2 className="size-3.5" />

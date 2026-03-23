@@ -59,11 +59,15 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
   const [tableSwitcherPos, setTableSwitcherPos] = useState<{ top: number; left: number } | null>(null);
   const [tableSwitcherSearch, setTableSwitcherSearch] = useState("");
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [toolsMenuPos, setToolsMenuPos] = useState<{ top: number; right: number } | null>(null);
   const tableMenuRef = useRef<HTMLDivElement>(null);
   const addImportMenuRef = useRef<HTMLDivElement>(null);
   const addImportBtnRef = useRef<HTMLButtonElement>(null);
   const tableSwitcherRef = useRef<HTMLDivElement>(null);
   const tableSwitcherBtnRef = useRef<HTMLButtonElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  const toolsBtnRef = useRef<HTMLButtonElement>(null);
 
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
@@ -95,6 +99,25 @@ export function TableTabs({ baseId }: { baseId: string }) {
     setHiddenFieldIds([]);
     setViewColor(null);
   }, [selectedId]);
+
+  // Global Esc closes all open menus / overlays in this component
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowGroupMenu(false);
+      setShowSortMenu(false);
+      setShowAddImportMenu(false);
+      setShowTableSwitcher(false);
+      setShowToolsMenu(false);
+      setTableMenuId(null);
+      if (showSearch) {
+        setShowSearch(false);
+        setSearchQuery("");
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [showSearch]);
 
   useEffect(() => {
     if (!showSortMenu) return;
@@ -140,6 +163,18 @@ export function TableTabs({ baseId }: { baseId: string }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showTableSwitcher]);
+
+  useEffect(() => {
+    if (!showToolsMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node) &&
+          toolsBtnRef.current && !toolsBtnRef.current.contains(e.target as Node)) {
+        setShowToolsMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showToolsMenu]);
 
   const handleSelectView = (view: {
     id: string | null;
@@ -267,29 +302,42 @@ export function TableTabs({ baseId }: { baseId: string }) {
         className="scrollbar-hidden flex flex-none items-center overflow-auto"
         style={{
           height: 32,
-          backgroundColor: "#f4f6f9",
-          paddingLeft: 4,
+          backgroundColor: "#fff1ff",
+          paddingLeft: 8,
           fontSize: 13,
         }}
       >
         <div className="flex min-w-0 flex-1 items-center">
-          {tableList.map((t) => {
+          {tableList.map((t, idx) => {
             const isActive = t.id === selectedId;
+            const prevIsActive = idx > 0 && tableList[idx - 1]?.id === selectedId;
+            const showSeparator = idx > 0 && !isActive && !prevIsActive;
 
             return (
+              <div key={t.id} className="flex items-center" style={{ height: 32 }}>
+              {showSeparator && (
+                <span
+                  style={{
+                    width: 1,
+                    height: 16,
+                    backgroundColor: "rgba(140,63,120,0.35)",
+                    flexShrink: 0,
+                    display: "block",
+                  }}
+                />
+              )}
               <div
-                key={t.id}
                 className="relative flex items-center"
                 style={
                   isActive
                     ? {
-                        backgroundColor: "#d9e2f5",
-                        borderRadius: 6,
-                        height: 24,
-                        position: "relative",
+                        backgroundColor: "white",
+                        borderRadius: "6px 6px 0 0",
+                        height: 32,
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.14)",
                       }
                     : {
-                        height: 24,
+                        height: 32,
                       }
                 }
               >
@@ -298,17 +346,17 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   className="flex h-full flex-auto select-none items-center transition-colors"
                   style={{
                     maxWidth: "32rem",
-                    paddingLeft: 12,
-                    paddingRight: isActive ? 24 : 12,
+                    paddingLeft: 8,
+                    paddingRight: isActive ? 8 : 8,
                     outlineOffset: -5,
-                    color: isActive ? "rgb(29, 31, 37)" : "rgb(97, 102, 112)",
-                    fontWeight: isActive ? 500 : 400,
-                    borderRadius: 6,
+                    color: "rgb(97, 102, 112)",
+                    fontWeight: 500,
+                    lineHeight: "18px",
+                    borderRadius: isActive ? "6px 6px 0 0" : 6,
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-                      e.currentTarget.style.borderRadius = "6px";
+                      e.currentTarget.style.backgroundColor = "rgba(140,63,120,0.1)";
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -319,7 +367,16 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 >
                   <span className="truncate whitespace-pre">{t.tableName}</span>
                   {isActive && (
-                    <ChevronDown className="ml-1 size-3 shrink-0 text-[rgb(97,102,112)]" />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTableMenuId(tableMenuId === t.id ? null : t.id);
+                      }}
+                      className="ml-1 flex shrink-0 items-center rounded px-1 hover:bg-gray-100"
+                      style={{ color: "rgb(97,102,112)" }}
+                    >
+                      <ChevronDown className="size-3" />
+                    </button>
                   )}
                 </button>
 
@@ -447,6 +504,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 </div>
               )}
             </div>
+            </div>
             );
           })}
 
@@ -465,14 +523,14 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 }
               }}
               className="ml-0.5 flex h-5 w-5 items-center justify-center rounded transition-colors"
-              style={{ color: "rgb(97, 102, 112)" }}
+              style={{ color: "rgb(97,102,112)" }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-                e.currentTarget.style.color = "rgb(29, 31, 37)";
+                e.currentTarget.style.backgroundColor = "rgba(140,63,120,0.1)";
+                e.currentTarget.style.color = "rgb(29,31,37)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.color = "rgb(97, 102, 112)";
+                e.currentTarget.style.color = "rgb(97,102,112)";
               }}
               title="Switch table"
             >
@@ -617,7 +675,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 className="mb-px ml-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
                 style={{ color: "rgb(97, 102, 112)" }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+                  e.currentTarget.style.backgroundColor = "rgba(140,63,120,0.1)";
                   e.currentTarget.style.color = "rgb(29, 31, 37)";
                 }}
                 onMouseLeave={(e) => {
@@ -785,25 +843,124 @@ export function TableTabs({ baseId }: { baseId: string }) {
         <div className="flex-1" />
         
         {/* Tools dropdown */}
-        <button
-          type="button"
-          className="flex items-center gap-1 self-center rounded px-2 py-1 text-[13px] font-normal transition-colors"
-          style={{
-            height: 24,
-            marginRight: 8,
-            color: "rgb(97, 102, 112)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-          }}
-          title="Tools"
-        >
-          <span>Tools</span>
-          <ChevronDown className="size-3 shrink-0" />
-        </button>
+        <div className="relative self-center" style={{ marginRight: 8 }}>
+          <button
+            ref={toolsBtnRef}
+            type="button"
+            onClick={() => {
+              if (showToolsMenu) {
+                setShowToolsMenu(false);
+              } else {
+                const rect = toolsBtnRef.current?.getBoundingClientRect();
+                if (rect) setToolsMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                setShowToolsMenu(true);
+              }
+            }}
+            className="mb-px flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
+            style={{ color: "rgb(97, 102, 112)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(140,63,120,0.1)";
+              e.currentTarget.style.color = "rgb(29, 31, 37)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "rgb(97, 102, 112)";
+            }}
+            title="Tools"
+          >
+            <span>Tools</span>
+            <ChevronDown className="size-3 shrink-0" />
+          </button>
+
+          {showToolsMenu && toolsMenuPos && (
+            <div
+              ref={toolsMenuRef}
+              className="fixed z-50 w-[340px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+              style={{ top: toolsMenuPos.top, right: toolsMenuPos.right }}
+            >
+              {/* Extensions */}
+              <button className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-gray-50">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                    <path d="M17.5 14v6M14.5 17h6" />
+                  </svg>
+                </span>
+                <span>
+                  <div className="text-[15px] font-medium text-[rgb(29,31,37)]">Extensions</div>
+                  <div className="text-[13px] text-[rgb(97,102,112)]">Extend the functionality of your base</div>
+                </span>
+              </button>
+
+              <div className="mx-5 border-t border-gray-100" />
+
+              {/* Manage fields */}
+              <button className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-gray-50">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                  <span className="text-[16px] font-semibold text-gray-600">A</span>
+                </span>
+                <span>
+                  <div className="text-[15px] font-medium text-[rgb(29,31,37)]">Manage fields</div>
+                  <div className="text-[13px] text-[rgb(97,102,112)]">Edit fields and inspect dependencies</div>
+                </span>
+              </button>
+
+              {/* Record templates */}
+              <button className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-gray-50">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600">
+                    <rect x="5" y="2" width="14" height="20" rx="2" />
+                    <line x1="9" y1="7" x2="15" y2="7" />
+                    <line x1="9" y1="11" x2="15" y2="11" />
+                    <line x1="9" y1="15" x2="13" y2="15" />
+                  </svg>
+                </span>
+                <span>
+                  <div className="text-[15px] font-medium text-[rgb(29,31,37)]">Record templates</div>
+                  <div className="text-[13px] text-[rgb(97,102,112)]">Create records from a template</div>
+                </span>
+              </button>
+
+              {/* Date dependencies */}
+              <button className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-gray-50">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600">
+                    <rect x="3" y="7" width="8" height="5" rx="1" />
+                    <rect x="13" y="12" width="8" height="5" rx="1" />
+                    <path d="M11 9.5h3a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </span>
+                <span>
+                  <div className="text-[15px] font-medium text-[rgb(29,31,37)]">Date dependencies</div>
+                  <div className="text-[13px] text-[rgb(97,102,112)]">Configure date shifting between dependent records</div>
+                </span>
+              </button>
+
+              {/* Insights */}
+              <button className="flex w-full items-center gap-4 px-5 py-4 text-left hover:bg-gray-50">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-600">
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                </span>
+                <span className="flex-1">
+                  <div className="flex items-center gap-2 text-[15px] font-medium text-[rgb(29,31,37)]">
+                    Insights
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.5 4.5H15l-4 3 1.5 4.5L8 10.5 3.5 13 5 8.5 1 5.5h5.5z"/></svg>
+                      Business
+                    </span>
+                  </div>
+                  <div className="text-[13px] text-[rgb(97,102,112)]">Understand and improve base health</div>
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
       </nav>
 
       {selectedId && (
@@ -811,7 +968,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
           id="viewBar"
           role="region"
           aria-label="View configuration"
-          className="flex flex-none items-center overflow-hidden border-b"
+          className="relative z-20 flex flex-none items-center border-b"
           style={{
             height: 48,
             minWidth: 600,
@@ -819,12 +976,12 @@ export function TableTabs({ baseId }: { baseId: string }) {
           }}
         >
           {/* Left side: hamburger toggle + Grid view label */}
-          <div className="flex flex-auto items-center" style={{ paddingLeft: 6, paddingRight: 4 }}>
+          <div className="flex flex-auto items-center" style={{ paddingLeft: 12, paddingRight: 8 }}>
             <button
               type="button"
               onClick={() => setShowSidebar((v) => !v)}
-              className="mr-0.5 flex items-center justify-center rounded text-[rgb(97,102,112)] hover:bg-[rgba(0,0,0,0.05)]"
-              style={{ width: 28, height: 28 }}
+              className="mr-1 flex items-center justify-center rounded-md text-[rgb(97,102,112)] hover:bg-[rgba(0,0,0,0.05)]"
+              style={{ width: 32, height: 32, borderRadius: 6 }}
               title={showSidebar ? "Close sidebar" : "Open sidebar"}
               aria-label={showSidebar ? "Close sidebar" : "Open sidebar"}
             >
@@ -840,7 +997,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                     <LayoutGrid className="size-4 flex-none text-[rgb(22,110,225)]" />
                   </span>
                   <span
-                    className="ml-1 mr-1 flex-auto truncate text-[13px] font-semibold text-[rgb(29,31,37)]"
+                    className="ml-1 mr-1 flex-auto truncate text-[13px] font-medium text-[rgb(29,31,37)]"
                     style={{ maxWidth: 200 }}
                   >
                     Grid view
@@ -863,7 +1020,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
 
           {/* Right side: toolbar buttons */}
           <div className="flex flex-auto items-center justify-end pr-1" style={{ height: "100%" }}>
-            <div className="flex flex-auto items-center justify-end overflow-hidden" style={{ height: "100%" }}>
+            <div className="flex flex-auto items-center justify-end" style={{ height: "100%" }}>
               <div className="flex grow items-center justify-end px-1">
                 <div className="flex items-center">
           <HideFieldsPanel
@@ -898,14 +1055,14 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 setShowGroupMenu(!showGroupMenu);
                 setShowSortMenu(false);
               }}
-              className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] ${
+              className={`mr-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] leading-[18px] transition-colors ${
                 groupByColumnId
                   ? "bg-airtable-purple/15 font-medium text-airtable-purple"
-                  : "text-airtable-text-secondary hover:bg-gray-100"
+                  : "font-normal text-airtable-text-secondary hover:bg-[#f2f4f8]"
               }`}
             >
-              <SquareSplitHorizontal className="size-3.5 shrink-0" />
-              {groupByColumnId ? "Grouped by 1 field" : "Group"}
+              <SquareSplitHorizontal className="size-4 shrink-0" />
+              <span className="truncate">{groupByColumnId ? "Grouped by 1 field" : "Group"}</span>
             </button>
 
             {showGroupMenu && (
@@ -971,14 +1128,14 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 setShowSortMenu(!showSortMenu);
                 setShowGroupMenu(false);
               }}
-              className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-[13px] transition-colors ${
+              className={`mr-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] leading-[18px] transition-colors ${
                 sortConfig
                   ? "bg-[#fff3cd] font-medium text-[#856404] border border-[#ffc107]/40"
-                  : "text-airtable-text-secondary hover:bg-gray-100"
+                  : "font-normal text-airtable-text-secondary hover:bg-[#f2f4f8]"
               }`}
             >
-              <ArrowDownUp className="size-3.5" />
-              {sortConfig ? "Sorted by 1 field" : "Sort"}
+              <ArrowDownUp className="size-4" />
+              <span className="truncate">{sortConfig ? "Sorted by 1 field" : "Sort"}</span>
             </button>
 
             {showSortMenu && (
@@ -1101,24 +1258,24 @@ export function TableTabs({ baseId }: { baseId: string }) {
           </div>
 
           {/* Color */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto gap-1.5 px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100"
+          <button
+            type="button"
+            className="mr-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal leading-[18px] text-airtable-text-secondary transition-colors hover:bg-[#f2f4f8]"
           >
-            <Palette className="size-3.5 shrink-0" />
-            Color
-          </Button>
+            <Palette className="size-4 shrink-0" />
+            <span className="truncate">Color</span>
+          </button>
 
           {/* Share and sync */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto gap-1.5 px-2 py-1 text-[13px] text-airtable-text-secondary hover:bg-gray-100"
-          >
-            <SquareArrowOutUpRight className="size-3.5 shrink-0" />
-            Share and sync
-          </Button>
+          <span className="mr-1 flex items-center">
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal leading-[18px] text-airtable-text-secondary transition-colors hover:bg-[#f2f4f8]"
+            >
+              <SquareArrowOutUpRight className="size-4 shrink-0" />
+              <span className="truncate">Share and sync</span>
+            </button>
+          </span>
 
           {/* Search */}
           {showSearch ? (
@@ -1151,8 +1308,9 @@ export function TableTabs({ baseId }: { baseId: string }) {
             <button
               type="button"
               onClick={() => setShowSearch(true)}
-              className="rounded-sm p-1.5 text-airtable-text-secondary hover:bg-gray-100"
-              title="Search"
+              className="flex items-center justify-center rounded p-1.5 text-airtable-text-secondary transition-colors hover:bg-[#f2f4f8]"
+              title="Find in view"
+              aria-label="toggle view search input"
             >
               <Search className="size-4" />
             </button>
