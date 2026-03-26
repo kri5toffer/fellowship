@@ -38,5 +38,5 @@
     "**/*.js",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "generated/**/runtime", "generated/**/*.js"]
+  "exclude": ["node_modules", "generated/**/runtime", "generated/**/*.js", "scripts"]
 }

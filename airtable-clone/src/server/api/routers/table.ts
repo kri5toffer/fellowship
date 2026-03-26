@@ -217,6 +217,12 @@ const AddBulkRowsInput = z.object({
   sequential: z.boolean().optional(),
 });
 
+const AddBulkRowsBatchInput = z.object({
+  tableId: z.string(),
+  batchSize: z.number().min(1).max(5000),
+  startOrder: z.number().min(0),
+});
+
 const ReorderRowsInput = z.object({
   tableId: z.string(),
   rowIds: z.array(z.string()),
@@ -581,6 +587,41 @@ export const tableRouter = createTRPCRouter({
       }
 
       return { inserted: count };
+    }),
+
+  addBulkRowsBatch: publicProcedure
+    .input(AddBulkRowsBatchInput)
+    .mutation(async ({ ctx, input }) => {
+      const { tableId, batchSize, startOrder } = input;
+
+      const columns = await ctx.db.column.findMany({
+        where: { tableId },
+        orderBy: { displayOrder: "asc" },
+      });
+
+      const rowData = Array.from({ length: batchSize }, (_, j) => ({
+        tableId,
+        displayOrder: startOrder + j,
+      }));
+
+      const createdRows = await ctx.db.row.createManyAndReturn({
+        data: rowData,
+        select: { id: true },
+      });
+
+      const cellData = createdRows.flatMap((row) =>
+        columns.map((col) => ({
+          rowId: row.id,
+          columnId: col.id,
+          cellValue: generateFakeValue(col.fieldType),
+        })),
+      );
+
+      if (cellData.length > 0) {
+        await ctx.db.cell.createMany({ data: cellData });
+      }
+
+      return { inserted: batchSize };
     }),
 
   deleteTable: publicProcedure

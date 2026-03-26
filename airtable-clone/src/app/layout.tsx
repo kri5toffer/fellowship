@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
 export const metadata: Metadata = {
   title: "Lyra",
   description: "Airtable Clone",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  icons: [{ rel: "icon", url: "/icon.svg", type: "image/svg+xml" }],
 };
 
 const inter = Inter({

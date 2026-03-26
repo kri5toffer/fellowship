@@ -251,9 +251,10 @@ interface TableGridProps {
   hiddenFieldIds?: string[];
   sortConfig?: { columnId: string; direction: "asc" | "desc" } | null;
   onAddingRowChange?: (isPending: boolean) => void;
+  bulkAddRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
-export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery = "", hiddenFieldIds = [], sortConfig = null, onAddingRowChange }: TableGridProps) {
+export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery = "", hiddenFieldIds = [], sortConfig = null, onAddingRowChange, bulkAddRef }: TableGridProps) {
   const utils = api.useUtils();
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
@@ -265,7 +266,9 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
   const { data: table, isLoading: isLoadingMeta } = api.table.getById.useQuery(
     { id: tableId },
   );
+  const totalRowCount = table?._count?.rows ?? 0;
 
+  const PAGE_SIZE = 500;
   const {
     data: rowsData,
     fetchNextPage,
@@ -275,7 +278,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
   } = api.table.getRows.useInfiniteQuery(
     {
       tableId,
-      limit: 100,
+      limit: PAGE_SIZE,
       filterGroup: filterGroup ?? createEmptyFilterGroup(),
       search: debouncedSearch,
     },
@@ -288,40 +291,40 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
   }, [utils, tableId]);
 
   const [pendingEdits, setPendingEdits] = useState<Record<string, string>>({});
-  const [pendingBulkCount, setPendingBulkCount] = useState(0);
+
+  const rowsQueryInput = useMemo(() => ({
+    tableId,
+    limit: PAGE_SIZE,
+    filterGroup: filterGroup ?? createEmptyFilterGroup(),
+    search: debouncedSearch,
+  }), [tableId, filterGroup, debouncedSearch]);
 
   const updateCell = api.table.updateCell.useMutation({
     onMutate: async (variables) => {
-      const queryInput = {
-        tableId,
-        limit: 100,
-        filterGroup: filterGroup ?? createEmptyFilterGroup(),
-        search: debouncedSearch,
-      };
-      await utils.table.getRows.cancel({ tableId });
-      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
-      utils.table.getRows.setInfiniteData(queryInput, (old) => {
+      await utils.table.getRows.cancel(rowsQueryInput);
+      const previousRows = utils.table.getRows.getInfiniteData(rowsQueryInput);
+      utils.table.getRows.setInfiniteData(rowsQueryInput, (old) => {
         if (!old) return old;
         return {
           ...old,
           pages: old.pages.map((page) => ({
             ...page,
             rows: page.rows.map((row) =>
-                row.id === variables.rowId
-                  ? {
-                      ...row,
-                      cells: row.cells.map((cell) =>
-                        cell.columnId === variables.columnId
-                          ? { ...cell, cellValue: variables.cellValue }
-                          : cell,
-                      ),
-                    }
-                  : row,
+              row.id === variables.rowId
+                ? {
+                    ...row,
+                    cells: row.cells.map((cell) =>
+                      cell.columnId === variables.columnId
+                        ? { ...cell, cellValue: variables.cellValue }
+                        : cell,
+                    ),
+                  }
+                : row,
             ),
           })),
         };
       });
-      return { previousRows, queryInput };
+      return { previousRows };
     },
     onSuccess: (_, variables) => {
       const key = `${variables.rowId}_${variables.columnId}`;
@@ -339,7 +342,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
         return next;
       });
       if (context?.previousRows !== undefined) {
-        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+        utils.table.getRows.setInfiniteData(rowsQueryInput, context.previousRows);
       }
     },
     onSettled: () => {
@@ -347,26 +350,127 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
     },
   });
 
-  const addBulkRows = api.table.addBulkRows.useMutation({
-    onMutate: ({ count }) => {
-      setPendingBulkCount(count ?? 0);
-    },
-    onSettled: () => {
-      setPendingBulkCount(0);
-      invalidateAll();
-    },
-  });
+  const addBulkRowsBatch = api.table.addBulkRowsBatch.useMutation();
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
+  const [bulkStartTime, setBulkStartTime] = useState<number | null>(null);
+  const [bulkElapsed, setBulkElapsed] = useState<number>(0);
+  const [bulkFinishTime, setBulkFinishTime] = useState<number | null>(null);
+  const bulkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Live elapsed time ticker
+  useEffect(() => {
+    if (bulkStartTime && isBulkAdding) {
+      bulkTimerRef.current = setInterval(() => {
+        setBulkElapsed(Date.now() - bulkStartTime);
+      }, 100);
+    }
+    return () => {
+      if (bulkTimerRef.current) clearInterval(bulkTimerRef.current);
+    };
+  }, [bulkStartTime, isBulkAdding]);
+  // Only store a 2000-row pool; track the full 100k count separately
+  const BULK_POOL_SIZE = 2000;
+  const [bulkRowPool, setBulkRowPool] = useState<FlatRow[]>([]);
+  const [bulkVirtualCount, setBulkVirtualCount] = useState(0);
+
+  const addBulkRows = useCallback(async () => {
+    if (isBulkAdding || !table) return;
+    const TOTAL = 100_000;
+    const BATCH_SIZE = 5000;
+    const CONCURRENCY = 6;
+    const cols = table.columns;
+
+    const startTime = Date.now();
+    setIsBulkAdding(true);
+    setBulkProgress(0);
+    setBulkFinishTime(null);
+    setBulkStartTime(startTime);
+    setBulkElapsed(0);
+
+    // --- Step 1: Generate a small pool and set virtual count to 100k ---
+    const firstNames = ["Alex", "Jordan", "Sam", "Riley", "Morgan", "Quinn", "Avery", "Blake", "Casey", "Drew", "Taylor", "Reese", "Jamie", "Dakota", "Hayden", "Emery", "Rowan", "Sage", "Finley", "Skyler"];
+    const lastNames = ["Kim", "Lee", "Chen", "Park", "Xu", "Wu", "Li", "Cho", "Tan", "Ng", "Zhang", "Liu", "Wang", "Yang", "Huang", "Lin", "Sun", "Ma", "Zhao", "Zhou"];
+
+    const makeFake = (ft: string) => {
+      if (ft === "NUMBER") return String(Math.floor(Math.random() * 100000));
+      if (ft === "CHECKBOX") return Math.random() > 0.5 ? "true" : "false";
+      return `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+    };
+
+    const pool: FlatRow[] = Array.from<FlatRow>({ length: BULK_POOL_SIZE });
+    for (let i = 0; i < BULK_POOL_SIZE; i++) {
+      const row: FlatRow = { _rowId: `local-${i}` };
+      for (const col of cols) {
+        row[col.id] = makeFake(col.fieldType);
+      }
+      pool[i] = row;
+    }
+    setBulkRowPool(pool);
+    setBulkVirtualCount(TOTAL);
+
+    // --- Step 2: Background sync to DB in batches ---
+    const startOrder = totalRowCount ?? 0;
+    const batches: { batchSize: number; startOrder: number }[] = [];
+    for (let i = 0; i < TOTAL; i += BATCH_SIZE) {
+      batches.push({
+        batchSize: Math.min(BATCH_SIZE, TOTAL - i),
+        startOrder: startOrder + i,
+      });
+    }
+
+    let completed = 0;
+    const runBatch = async (batch: (typeof batches)[0]) => {
+      await addBulkRowsBatch.mutateAsync({
+        tableId,
+        batchSize: batch.batchSize,
+        startOrder: batch.startOrder,
+      });
+      completed += batch.batchSize;
+      setBulkProgress(Math.round((completed / TOTAL) * 100));
+    };
+
+    const queue = [...batches];
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length > 0) {
+        const batch = queue.shift()!;
+        await runBatch(batch);
+      }
+    });
+
+    try {
+      await Promise.all(workers);
+    } catch (err) {
+      console.error("Bulk insert error:", err);
+    }
+
+    // --- Step 3: Swap local rows for real DB data ---
+    if (bulkTimerRef.current) clearInterval(bulkTimerRef.current);
+    setBulkElapsed(Date.now() - startTime);
+    setBulkFinishTime(Date.now());
+    setBulkProgress(100);
+
+    // Wait for DB count to update before clearing bulk virtual rows
+    // so the virtualizer count doesn't briefly drop to just the old DB count
+    await utils.table.getById.invalidate({ id: tableId });
+    await utils.table.getRows.invalidate({ tableId });
+
+    setBulkRowPool([]);
+    setBulkVirtualCount(0);
+    setIsBulkAdding(false);
+    setBulkStartTime(null);
+  }, [isBulkAdding, table, tableId, totalRowCount, addBulkRowsBatch, invalidateAll, utils]);
+
+  // Expose addBulkRows to parent via ref
+  useEffect(() => {
+    if (bulkAddRef) bulkAddRef.current = addBulkRows;
+    return () => { if (bulkAddRef) bulkAddRef.current = null; };
+  }, [bulkAddRef, addBulkRows]);
 
   const addRow = api.table.createRow.useMutation({
     onMutate: async () => {
-      const queryInput = {
-        tableId,
-        limit: 100,
-        filterGroup: filterGroup ?? createEmptyFilterGroup(),
-        search: debouncedSearch,
-      };
-      await utils.table.getRows.cancel({ tableId });
-      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
+      await utils.table.getRows.cancel(rowsQueryInput);
+      const previousRows = utils.table.getRows.getInfiniteData(rowsQueryInput);
       const now = new Date();
       const tempId = `temp-${Date.now()}`;
       const tempRow = {
@@ -385,7 +489,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
           updatedAt: now,
         })),
       };
-      utils.table.getRows.setInfiniteData(queryInput, (old) => {
+      utils.table.getRows.setInfiniteData(rowsQueryInput, (old) => {
         if (!old) return old;
         const lastPageIndex = old.pages.length - 1;
         return {
@@ -397,12 +501,11 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
           ),
         };
       });
-      return { previousRows, queryInput };
+      return { previousRows };
     },
     onSuccess: (newRow, _variables, context) => {
       if (!context) return;
-      // Replace the temp row with the real row so subsequent cell edits use the real rowId
-      utils.table.getRows.setInfiniteData(context.queryInput, (old) => {
+      utils.table.getRows.setInfiniteData(rowsQueryInput, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -417,7 +520,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
     },
     onError: (_err, _variables, context) => {
       if (context?.previousRows !== undefined) {
-        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+        utils.table.getRows.setInfiniteData(rowsQueryInput, context.previousRows);
       }
     },
     onSettled: () => {
@@ -431,31 +534,23 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
 
   const deleteRow = api.table.deleteRow.useMutation({
     onMutate: async (variables) => {
-      const queryInput = {
-        tableId,
-        limit: 100,
-        filterGroup: filterGroup ?? createEmptyFilterGroup(),
-        search: debouncedSearch,
-      };
-      await utils.table.getRows.cancel({ tableId });
-      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
-      utils.table.getRows.setInfiniteData(queryInput, (old) => {
+      await utils.table.getRows.cancel(rowsQueryInput);
+      const previousRows = utils.table.getRows.getInfiniteData(rowsQueryInput);
+      utils.table.getRows.setInfiniteData(rowsQueryInput, (old) => {
         if (!old) return old;
         return {
           ...old,
           pages: old.pages.map((page) => ({
             ...page,
-            rows: page.rows.filter(
-              (row: { id: string }) => row.id !== variables.rowId,
-            ),
+            rows: page.rows.filter((row) => row.id !== variables.rowId),
           })),
         };
       });
-      return { previousRows, queryInput };
+      return { previousRows };
     },
     onError: (_err, _variables, context) => {
       if (context?.previousRows !== undefined) {
-        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+        utils.table.getRows.setInfiniteData(rowsQueryInput, context.previousRows);
       }
     },
     onSettled: () => {
@@ -546,30 +641,20 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
 
   const reorderRows = api.table.reorderRows.useMutation({
     onMutate: async (variables) => {
-      const queryInput = {
-        tableId,
-        limit: 100,
-        filterGroup: filterGroup ?? createEmptyFilterGroup(),
-        search: debouncedSearch,
-      };
-      await utils.table.getRows.cancel({ tableId });
-      const previousRows = utils.table.getRows.getInfiniteData(queryInput);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      utils.table.getRows.setInfiniteData(queryInput, (old: any) => {
+      await utils.table.getRows.cancel(rowsQueryInput);
+      const previousRows = utils.table.getRows.getInfiniteData(rowsQueryInput);
+      /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      utils.table.getRows.setInfiniteData(rowsQueryInput, (old: any) => {
         if (!old) return old;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const allPageRows: any[] = old.pages.flatMap((p: any) => p.rows);
-        const rowMap = new Map(allPageRows.map((r) => [r.id, r]));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rowMap = new Map(allPageRows.map((r: any) => [r.id, r]));
         const reordered: any[] = variables.rowIds
           .map((id) => rowMap.get(id))
           .filter(Boolean);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const pageSizes = old.pages.map((p: any) => (p.rows as any[]).length);
         let offset = 0;
         return {
           ...old,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pages: old.pages.map((page: any, i: number) => {
             const size = pageSizes[i] ?? 0;
             const pageRows = reordered.slice(offset, offset + size);
@@ -578,11 +663,12 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
           }),
         };
       });
-      return { previousRows, queryInput };
+      /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      return { previousRows };
     },
     onError: (_err, _variables, context) => {
       if (context?.previousRows) {
-        utils.table.getRows.setInfiniteData(context.queryInput, context.previousRows);
+        utils.table.getRows.setInfiniteData(rowsQueryInput, context.previousRows);
       }
     },
     onSettled: () => { invalidateAll(); },
@@ -719,7 +805,6 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
     () => allDbColumns.filter((col) => !hiddenFieldIds.includes(col.id)),
     [allDbColumns, hiddenFieldIds],
   );
-  const totalRowCount = table?._count?.rows ?? 0;
 
   const allRows = useMemo(
     () => rowsData?.pages.flatMap((page) => page.rows) ?? [],
@@ -1003,8 +1088,13 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
 
   const { rows: tableRows } = reactTable.getRowModel();
 
+  // Virtualizer count: real DB total + any bulk virtual rows being inserted
+  const virtualRowCount = totalRowCount + bulkVirtualCount;
+  // How many rows we actually have loaded data for
+  const loadedRowCount = tableRows.length;
+
   const rowVirtualizer = useVirtualizer({
-    count: tableRows.length + pendingBulkCount,
+    count: virtualRowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 20,
@@ -1012,18 +1102,19 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
 
   const virtualRows = rowVirtualizer.getVirtualItems();
 
+  // Auto-fetch next page when scrolling near the end of loaded data
   useEffect(() => {
     const lastItem = virtualRows.at(-1);
     if (!lastItem) return;
 
     if (
-      lastItem.index >= flatData.length - 30 &&
+      lastItem.index >= loadedRowCount - 30 &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
       void fetchNextPage();
     }
-  }, [virtualRows, flatData.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [virtualRows, loadedRowCount, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (isLoadingMeta || isLoadingRows) {
     return (
@@ -1121,7 +1212,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                         if (fromIdx === -1 || toIdx === -1) return;
                         ids.splice(fromIdx, 1);
                         ids.splice(toIdx, 0, dragColId);
-                        reorderColumns.mutate({ tableId: table!.id, columnIds: ids });
+                        reorderColumns.mutate({ tableId: table.id, columnIds: ids });
                         setDragColId(null);
                         setDropColTargetId(null);
                       }}
@@ -1218,15 +1309,52 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
               </tr>
             )}
             {(() => {
-              let dataRowNum = 0; // Counter for data rows only (not group headers)
+              let dataRowNum = 0;
+              const poolLen = bulkRowPool.length;
               return virtualRows.map((virtualRow) => {
-                // Optimistic placeholder row (bulk insert in progress)
-                if (virtualRow.index >= tableRows.length) {
-                  const placeholderNum = virtualRow.index + 1;
+                const idx = virtualRow.index;
+
+                // --- CASE 1: Beyond loaded DB data → bulk pool or skeleton ---
+                if (idx >= loadedRowCount) {
+                  const bulkOffset = idx - loadedRowCount;
+
+                  // If bulk pool exists, cycle through it
+                  if (poolLen > 0) {
+                    const poolRow = bulkRowPool[bulkOffset % poolLen]!;
+                    return (
+                      <tr
+                        key={`bulk-${idx}`}
+                        data-index={idx}
+                        ref={rowVirtualizer.measureElement}
+                        style={{ height: `${ROW_HEIGHT}px` }}
+                      >
+                        <td
+                          className="sticky left-0 z-[1] border-b border-r border-airtable-border bg-white p-0 text-center text-[11px] text-airtable-text-secondary"
+                          style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
+                        >
+                          {idx + 1}
+                        </td>
+                        {dbColumns.map((col) => (
+                          <td
+                            key={col.id}
+                            className="border-b border-r border-airtable-border p-0"
+                            style={{ width: getColWidth(col.id), minWidth: MIN_COL_WIDTH, height: ROW_HEIGHT }}
+                          >
+                            <div className="flex h-full items-center text-[13px] leading-[19.5px] text-airtable-text-primary" style={{ padding: "0 6px" }}>
+                              <span className="truncate">{String(poolRow[col.id] ?? "")}</span>
+                            </div>
+                          </td>
+                        ))}
+                        <td className="border-b border-airtable-border" />
+                      </tr>
+                    );
+                  }
+
+                  // Otherwise skeleton placeholder
                   return (
                     <tr
-                      key={`placeholder-${virtualRow.index}`}
-                      data-index={virtualRow.index}
+                      key={`skeleton-${idx}`}
+                      data-index={idx}
                       ref={rowVirtualizer.measureElement}
                       style={{ height: `${ROW_HEIGHT}px` }}
                     >
@@ -1234,20 +1362,24 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                         className="sticky left-0 z-[1] border-b border-r border-airtable-border bg-white p-0 text-center text-[11px] text-airtable-text-secondary"
                         style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
                       >
-                        {placeholderNum}
+                        {idx + 1}
                       </td>
                       {dbColumns.map((col) => (
                         <td
                           key={col.id}
-                          className="border-b border-r border-airtable-border"
-                          style={{ height: ROW_HEIGHT }}
-                        />
+                          className="border-b border-r border-airtable-border p-0"
+                          style={{ width: getColWidth(col.id), minWidth: MIN_COL_WIDTH, height: ROW_HEIGHT }}
+                        >
+                          <div className="mx-1.5 my-2 h-3 animate-pulse rounded bg-gray-100" />
+                        </td>
                       ))}
+                      <td className="border-b border-airtable-border" />
                     </tr>
                   );
                 }
 
-                const row = tableRows[virtualRow.index]!;
+                // --- CASE 2: Loaded DB data row ---
+                const row = tableRows[idx]!;
                 const isGroupHeader = row.original._isGroupHeader;
 
                 // Render group header row
@@ -1318,7 +1450,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                       if (fromIdx === -1 || toIdx === -1) return;
                       ids.splice(fromIdx, 1);
                       ids.splice(toIdx, 0, dragRowId);
-                      reorderRows.mutate({ tableId: table!.id, rowIds: ids });
+                      reorderRows.mutate({ tableId: table.id, rowIds: ids });
                       setDragRowId(null);
                       setDropRowTargetId(null);
                     }}
@@ -1482,16 +1614,16 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
             </svg>
           </button>
           <button
-            onClick={() => addBulkRows.mutate({ tableId: table.id, count: 100_000 })}
-            disabled={addBulkRows.isPending}
+            onClick={() => { setBulkFinishTime(null); void addBulkRows(); }}
+            disabled={isBulkAdding}
             className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-0.5 text-[11px] text-airtable-text-secondary shadow-sm hover:bg-[#f2f4f8] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {addBulkRows.isPending ? (
+            {isBulkAdding ? (
               <>
                 <svg className="size-3 animate-spin" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
                 </svg>
-                Adding 100k rows...
+                {bulkProgress}% — {(bulkElapsed / 1000).toFixed(1)}s
               </>
             ) : (
               <>
@@ -1502,9 +1634,17 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
               </>
             )}
           </button>
+          {bulkFinishTime && !isBulkAdding && (
+            <span className="flex items-center gap-1 text-[11px] text-green-600">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-500">
+                <path d="M3 8.5l3 3 7-7" />
+              </svg>
+              100k rows in {(bulkElapsed / 1000).toFixed(1)}s
+            </span>
+          )}
         </div>
         <div className="ml-2 text-[11px] text-airtable-text-secondary">
-          {totalRowCount} record{totalRowCount !== 1 ? "s" : ""}
+          {totalRowCount + bulkVirtualCount} record{(totalRowCount + bulkVirtualCount) !== 1 ? "s" : ""}{bulkVirtualCount > 0 && ` (syncing ${bulkProgress}%)`}
         </div>
       </div>
 
@@ -1600,8 +1740,6 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
       {expandedRowId && (() => {
         const rowData = flatData.find((r) => r._rowId === expandedRowId);
         if (!rowData) return null;
-        const rowIndex = flatData.filter((r) => !r._isGroupHeader).indexOf(rowData) + 1;
-        const totalFiltered = flatData.filter((r) => !r._isGroupHeader).length;
         const nonGroupRows = flatData.filter((r) => !r._isGroupHeader);
         const currentIdx = nonGroupRows.findIndex((r) => r._rowId === expandedRowId);
         return (

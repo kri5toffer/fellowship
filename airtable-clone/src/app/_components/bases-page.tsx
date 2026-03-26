@@ -575,6 +575,7 @@ export function BasesPage() {
                   const date = new Date(b.updatedAt);
                   return date < todayStart && date >= sevenDaysAgo;
                 });
+                const earlierBases = baseList.filter(b => new Date(b.updatedAt) < sevenDaysAgo);
 
                 return (
                   <>
@@ -998,6 +999,117 @@ export function BasesPage() {
                                           tabIndex={0}
                                           title={base.updatedAt.toLocaleString()}
                                         >
+                                          {timeAgo(base.updatedAt)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Link>
+                            )}
+                          </div>
+                        ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Earlier section */}
+                    {earlierBases.length > 0 && (
+                      <div className="mb-[24px] w-full">
+                        <h4 className="mb-[8px] text-[13px] font-medium leading-[16.25px] text-[rgb(97,102,112)]">
+                          Earlier
+                        </h4>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(286px, 1fr))", gap: "16px" }}>
+                        {earlierBases.map((base) => (
+                          <div key={base.id}>
+                            {renamingBaseId === base.id ? (
+                              <div
+                                className="relative flex cursor-pointer overflow-hidden rounded-[6px] bg-white"
+                                style={{
+                                  height: "92px",
+                                  boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+                                  zIndex: menuOpenId === base.id ? 20 : undefined,
+                                }}
+                              >
+                                <div className="flex shrink-0 items-center justify-center" style={{ width: "92px", height: "92px", minWidth: "92px" }}>
+                                  <div className="flex items-center justify-center text-white" style={{ backgroundColor: base.color, width: "56px", height: "56px", borderRadius: "12px" }}>
+                                    <span style={{ fontSize: "22px", fontWeight: 600, lineHeight: 1.2 }}>
+                                      {renameBaseValue.slice(0, 2).toUpperCase() || base.baseName.slice(0, 2).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="mr-[16px] flex flex-auto flex-col justify-center text-left">
+                                  <input
+                                    autoFocus
+                                    value={renameBaseValue}
+                                    onChange={(e) => setRenameBaseValue(e.target.value)}
+                                    onBlur={() => {
+                                      if (renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
+                                      else { setRenamingBaseId(null); setRenameBaseValue(""); }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && renameBaseValue.trim()) renameBase.mutate({ id: base.id, baseName: renameBaseValue.trim() });
+                                      if (e.key === "Escape") { setRenamingBaseId(null); setRenameBaseValue(""); }
+                                    }}
+                                    className="truncate rounded border border-blue-400 px-2 py-1 text-[13px] font-medium leading-[19.5px] text-[rgb(29,31,37)] outline-none"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <Link
+                                href={`/base/${base.id}`}
+                                className="group relative flex cursor-pointer rounded-[6px] bg-white transition-shadow hover:shadow-[0px_0px_1px_0px_rgba(0,0,0,0.48),0px_0px_2px_0px_rgba(0,0,0,0.08),0px_2px_4px_0px_rgba(0,0,0,0.12),0px_2px_8px_0px_rgba(0,0,0,0.08)]"
+                                role="region"
+                                aria-label={base.baseName}
+                                style={{
+                                  height: "92px",
+                                  boxShadow: "0px 0px 1px rgba(0,0,0,0.32), 0px 0px 2px rgba(0,0,0,0.08), 0px 1px 3px rgba(0,0,0,0.08)",
+                                  zIndex: menuOpenId === base.id ? 20 : undefined,
+                                }}
+                              >
+                                <div className="flex shrink-0 items-center justify-center overflow-hidden rounded-l-[6px]" aria-hidden="true" style={{ width: "92px", height: "92px", minWidth: "92px" }}>
+                                  <div className="flex items-center justify-center text-white" style={{ backgroundColor: base.color, width: "56px", height: "56px", borderRadius: "12px" }}>
+                                    <span style={{ fontSize: "22px", fontWeight: 600, lineHeight: 1.2 }}>
+                                      {base.baseName.slice(0, 2).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="mr-[16px] flex flex-auto flex-col justify-center text-left">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex flex-auto">
+                                      <Link href={`/base/${base.id}`} className="flex flex-auto flex-grow-0 items-center text-left">
+                                        <h3 className="truncate text-[13px] font-medium leading-[19.5px] text-[rgb(29,31,37)]">{base.baseName}</h3>
+                                      </Link>
+                                    </div>
+                                    <div className={`absolute right-0 top-0 z-[1] mr-[10px] mt-[10px] flex items-center gap-[4px] transition-opacity ${menuOpenId === base.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`} data-menu-container>
+                                      <button onClick={(e) => { e.preventDefault(); }} className="flex h-[28px] w-[28px] items-center justify-center rounded-[4px] text-[rgb(97,102,112)] hover:bg-[rgb(244,246,249)] hover:text-[rgb(29,31,37)]" title="Favourite">
+                                        <Star className="size-4" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.preventDefault(); setMenuOpenId(menuOpenId === base.id ? null : base.id); }}
+                                        className="flex h-[28px] w-[28px] items-center justify-center rounded-[4px] text-[rgb(97,102,112)] hover:bg-[rgb(244,246,249)] hover:text-[rgb(29,31,37)]"
+                                        style={{ backgroundColor: menuOpenId === base.id ? "rgb(59, 130, 246)" : "transparent", color: menuOpenId === base.id ? "white" : undefined }}
+                                        title="More options"
+                                      >
+                                        <MoreHorizontal className="size-4" />
+                                      </button>
+                                      {menuOpenId === base.id && (
+                                        <div className="absolute left-0 top-[32px] z-[100] w-[250px] rounded-[6px] bg-white py-[8px]" style={{ boxShadow: "0px 0px 1px rgba(0,0,0,0.24), 0px 0px 2px rgba(0,0,0,0.16), 0px 3px 4px rgba(0,0,0,0.06), 0px 6px 8px rgba(0,0,0,0.06), 0px 12px 16px rgba(0,0,0,0.08), 0px 18px 32px rgba(0,0,0,0.06)" }} onClick={(e) => e.preventDefault()}>
+                                          <button onClick={(e) => { e.preventDefault(); setRenamingBaseId(base.id); setRenameBaseValue(base.baseName); setMenuOpenId(null); }} className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"><Edit className="size-4 text-[rgb(97,102,112)]" /><span>Rename</span></button>
+                                          <button onClick={(e) => e.preventDefault()} className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"><Copy className="size-4 text-[rgb(97,102,112)]" /><span>Duplicate</span></button>
+                                          <button onClick={(e) => e.preventDefault()} className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"><ArrowRight className="size-4 text-[rgb(97,102,112)]" /><span>Move</span></button>
+                                          <button onClick={(e) => e.preventDefault()} className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"><UserPlus className="size-4 text-[rgb(97,102,112)]" /><span>Go to workspace</span></button>
+                                          <button onClick={(e) => e.preventDefault()} className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-[rgb(29,31,37)] hover:bg-[rgb(244,246,249)]"><Palette className="size-4 text-[rgb(97,102,112)]" /><span>Customize appearance</span></button>
+                                          <div className="my-[8px] h-[1px] bg-[rgb(229,233,240)]" />
+                                          <button onClick={(e) => { e.preventDefault(); if (confirm(`Are you sure you want to delete "${base.baseName}"?`)) { deleteBase.mutate({ id: base.id }); setMenuOpenId(null); } }} className="flex w-full items-center gap-[12px] px-[16px] py-[8px] text-left text-[15px] text-red-600 hover:bg-red-50"><Trash2 className="size-4" /><span>Delete</span></button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="mt-[4px] flex items-center">
+                                    <div className="truncate text-[11px] leading-[16.5px] text-[rgb(97,102,112)]">
+                                      <div className="flex items-center">
+                                        <div className="relative z-[2] truncate" role="button" tabIndex={0} title={base.updatedAt.toLocaleString()}>
                                           {timeAgo(base.updatedAt)}
                                         </div>
                                       </div>

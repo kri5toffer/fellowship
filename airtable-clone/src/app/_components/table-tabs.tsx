@@ -49,6 +49,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [sortConfig, setSortConfig] = useState<{ columnId: string; direction: "asc" | "desc" } | null>(null);
   const [viewColor, setViewColor] = useState<string | null>(null);
   const [tableMenuId, setTableMenuId] = useState<string | null>(null);
+  const [tableMenuPos, setTableMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [renamingTableId, setRenamingTableId] = useState<string | null>(null);
   const [renameTableValue, setRenameTableValue] = useState("");
   const [recordTypeName, setRecordTypeName] = useState("Record");
@@ -68,6 +69,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const tableSwitcherBtnRef = useRef<HTMLButtonElement>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
   const toolsBtnRef = useRef<HTMLButtonElement>(null);
+  const bulkAddRef = useRef<(() => Promise<void>) | null>(null);
 
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
@@ -109,7 +111,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
       setShowAddImportMenu(false);
       setShowTableSwitcher(false);
       setShowToolsMenu(false);
-      setTableMenuId(null);
+      setTableMenuId(null); setTableMenuPos(null);
       if (showSearch) {
         setShowSearch(false);
         setSearchQuery("");
@@ -134,7 +136,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
     if (!tableMenuId) return;
     const handler = (e: MouseEvent) => {
       if (tableMenuRef.current && !tableMenuRef.current.contains(e.target as Node)) {
-        setTableMenuId(null);
+        setTableMenuId(null); setTableMenuPos(null);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -247,13 +249,6 @@ export function TableTabs({ baseId }: { baseId: string }) {
     onSuccess: () => { /* form already closed optimistically */ },
   });
 
-  const addBulkRows = api.table.addBulkRows.useMutation({
-    onSuccess: () => {
-      void utils.table.getRows.invalidate({ tableId: selectedId ?? "" });
-      void utils.table.getById.invalidate({ id: selectedId ?? "" });
-    },
-  });
-
   const updateView = api.view.update.useMutation({
     onMutate: async (variables) => {
       const tableId = selectedId ?? "";
@@ -299,9 +294,9 @@ export function TableTabs({ baseId }: { baseId: string }) {
       {/* Table tabs bar */}
       <nav
         aria-label="Tables"
-        className="scrollbar-hidden flex flex-none items-center overflow-auto"
+        className="scrollbar-hidden flex flex-none items-end overflow-auto"
         style={{
-          height: 32,
+          height: 40,
           backgroundColor: "#fff1ff",
           paddingLeft: 8,
           fontSize: 13,
@@ -314,7 +309,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
             const showSeparator = idx > 0 && !isActive && !prevIsActive;
 
             return (
-              <div key={t.id} className="flex items-center" style={{ height: 32 }}>
+              <div key={t.id} className="flex items-end" style={{ height: 40 }}>
               {showSeparator && (
                 <span
                   style={{
@@ -327,7 +322,8 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 />
               )}
               <div
-                className="relative flex items-center"
+                data-tab-wrapper
+                className="group/tab relative flex items-center"
                 style={
                   isActive
                     ? {
@@ -335,9 +331,11 @@ export function TableTabs({ baseId }: { baseId: string }) {
                         borderRadius: "6px 6px 0 0",
                         height: 32,
                         boxShadow: "0 1px 4px rgba(0,0,0,0.14)",
+                        alignSelf: "flex-end",
                       }
                     : {
                         height: 32,
+                        alignSelf: "flex-end",
                       }
                 }
               >
@@ -346,12 +344,13 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   className="flex h-full flex-auto select-none items-center transition-colors"
                   style={{
                     maxWidth: "32rem",
-                    paddingLeft: 8,
-                    paddingRight: isActive ? 8 : 8,
+                    paddingLeft: 12,
+                    paddingRight: isActive ? 28 : 12,
                     outlineOffset: -5,
-                    color: "rgb(97, 102, 112)",
-                    fontWeight: 500,
+                    color: isActive ? "rgb(29, 31, 37)" : "rgba(0, 0, 0, 0.65)",
+                    fontWeight: 400,
                     lineHeight: "18px",
+                    cursor: "pointer",
                     borderRadius: isActive ? "6px 6px 0 0" : 6,
                   }}
                   onMouseEnter={(e) => {
@@ -365,141 +364,250 @@ export function TableTabs({ baseId }: { baseId: string }) {
                     }
                   }}
                 >
-                  <span className="truncate whitespace-pre">{t.tableName}</span>
-                  {isActive && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTableMenuId(tableMenuId === t.id ? null : t.id);
-                      }}
-                      className="ml-1 flex shrink-0 items-center rounded px-1 hover:bg-gray-100"
-                      style={{ color: "rgb(97,102,112)" }}
-                    >
-                      <ChevronDown className="size-3" />
-                    </button>
-                  )}
+                  <span className="truncate" style={{ whiteSpace: "pre" }}>{t.tableName}</span>
                 </button>
+                {/* Chevron — absolutely positioned like Airtable */}
+                <div
+                  className={`absolute bottom-0 top-0 flex items-center ${isActive ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"}`}
+                  style={{ right: 0, userSelect: "none" }}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (tableMenuId === t.id) {
+                        setTableMenuId(null); setTableMenuPos(null);
+                        setTableMenuPos(null);
+                      } else {
+                        const rect = e.currentTarget.closest("[data-tab-wrapper]")?.getBoundingClientRect();
+                        if (rect) {
+                          setTableMenuPos({ top: rect.bottom + 2, left: rect.left });
+                        }
+                        setTableMenuId(t.id);
+                      }
+                    }}
+                    className="flex items-center rounded-sm p-0.5 hover:bg-black/5"
+                  >
+                    <ChevronDown
+                      width={16}
+                      height={16}
+                      style={{ flex: "none", color: "rgba(0,0,0,0.65)", shapeRendering: "geometricPrecision" }}
+                    />
+                  </button>
+                </div>
 
-              {tableMenuId === t.id && (
+              {tableMenuId === t.id && tableMenuPos && (
                 <div
                   ref={tableMenuRef}
-                  className="absolute left-0 top-full z-40 mt-0.5 w-60 rounded-lg border border-gray-200 bg-white py-1.5 shadow-lg"
+                  style={{
+                    position: "fixed",
+                    top: tableMenuPos.top,
+                    left: tableMenuPos.left,
+                    zIndex: 50,
+                    width: 330,
+                    backgroundColor: "rgb(255, 255, 255)",
+                    borderRadius: 6,
+                    boxShadow: "0px 0px 1px rgba(0,0,0,0.24), 0px 0px 2px rgba(0,0,0,0.16), 0px 3px 4px rgba(0,0,0,0.06), 0px 6px 8px rgba(0,0,0,0.06), 0px 12px 16px rgba(0,0,0,0.08), 0px 18px 32px rgba(0,0,0,0.06)",
+                    padding: "0.75rem",
+                    fontFamily: "-apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif",
+                    fontSize: 13,
+                    lineHeight: "18px",
+                    color: "rgb(29, 31, 37)",
+                    overflowY: "auto",
+                  }}
                 >
                   {/* Import data */}
-                  <button className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <span className="flex items-center gap-2.5">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                        <path d="M8 2v8M5 7l3 3 3-3" />
-                        <path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" />
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <path d="M8 2v8M5 7l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Import data
+                      </span>
+                      <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                        <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" />
                       </svg>
-                      Import data
                     </span>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-400">
-                      <path d="M6 4l4 4-4 4" />
-                    </svg>
                   </button>
 
-                  <div className="my-1.5 border-t border-gray-100" />
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.05)", margin: "4px 0" }} />
 
                   {/* Rename table */}
                   <button
-                    onClick={() => { setRenamingTableId(t.id); setRenameTableValue(t.tableName); setTableMenuId(null); }}
-                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50"
+                    onClick={() => { setRenamingTableId(t.id); setRenameTableValue(t.tableName); setTableMenuId(null); setTableMenuPos(null); }}
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <path d="M11 2.5l2.5 2.5-8 8H3V10.5l8-8z" />
-                    </svg>
-                    Rename table
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <path d="M11 2.5l2.5 2.5-8 8H3V10.5l8-8z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Rename table
+                      </span>
+                    </span>
                   </button>
 
                   {/* Hide table */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
-                      <circle cx="8" cy="8" r="2" />
-                      <line x1="2" y1="2" x2="14" y2="14" />
-                    </svg>
-                    Hide table
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <line x1="2" y1="2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Hide table
+                      </span>
+                    </span>
                   </button>
 
                   {/* Manage fields */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <line x1="1" y1="4" x2="15" y2="4" />
-                      <line x1="1" y1="8" x2="15" y2="8" />
-                      <line x1="1" y1="12" x2="15" y2="12" />
-                      <circle cx="5" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth="1.5" />
-                      <circle cx="10" cy="12" r="1.5" fill="white" stroke="currentColor" strokeWidth="1.5" />
-                    </svg>
-                    Manage fields
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <line x1="1" y1="4" x2="15" y2="4" stroke="currentColor" strokeWidth="1.5" />
+                          <line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="1.5" />
+                          <line x1="1" y1="12" x2="15" y2="12" stroke="currentColor" strokeWidth="1.5" />
+                          <circle cx="5" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth="1.5" />
+                          <circle cx="10" cy="12" r="1.5" fill="white" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Manage fields
+                      </span>
+                    </span>
                   </button>
 
                   {/* Duplicate table */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <rect x="5" y="5" width="9" height="9" rx="1" />
-                      <path d="M2 11V2h9" />
-                    </svg>
-                    Duplicate table
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <rect x="5" y="5" width="9" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M2 11V2h9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Duplicate table
+                      </span>
+                    </span>
                   </button>
 
-                  <div className="my-1.5 border-t border-gray-100" />
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.05)", margin: "4px 0" }} />
 
                   {/* Configure date dependencies */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <rect x="1" y="2" width="5" height="5" rx="1" />
-                      <rect x="10" y="9" width="5" height="5" rx="1" />
-                      <path d="M6 4.5h2a2 2 0 0 1 2 2v2" />
-                      <path d="M9 7l1.5 1.5L9 10" />
-                    </svg>
-                    Configure date dependencies
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <rect x="1" y="2" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <rect x="10" y="9" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M6 4.5h2a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M9 7l1.5 1.5L9 10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Configure date dependencies
+                      </span>
+                    </span>
                   </button>
 
-                  <div className="my-1.5 border-t border-gray-100" />
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.05)", margin: "4px 0" }} />
 
                   {/* Edit table description */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <circle cx="8" cy="8" r="6" />
-                      <path d="M8 7v4" />
-                      <circle cx="8" cy="5" r="0.5" fill="currentColor" />
-                    </svg>
-                    Edit table description
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M8 7v4" stroke="currentColor" strokeWidth="1.5" />
+                          <circle cx="8" cy="5" r="0.5" fill="currentColor" />
+                        </svg>
+                        Edit table description
+                      </span>
+                    </span>
                   </button>
 
                   {/* Edit table permissions */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <rect x="3" y="7" width="10" height="7" rx="1" />
-                      <path d="M5 7V5a3 3 0 0 1 6 0v2" />
-                    </svg>
-                    Edit table permissions
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <rect x="3" y="7" width="10" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Edit table permissions
+                      </span>
+                    </span>
                   </button>
 
-                  <div className="my-1.5 border-t border-gray-100" />
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.05)", margin: "4px 0" }} />
 
                   {/* Clear data */}
-                  <button className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <line x1="4" y1="4" x2="12" y2="12" />
-                      <line x1="12" y1="4" x2="4" y2="12" />
-                    </svg>
-                    Clear data
+                  <button
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(29,31,37)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                          <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" />
+                          <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Clear data
+                      </span>
+                    </span>
                   </button>
 
                   {/* Delete table */}
                   <button
-                    onClick={() => { deleteTable.mutate({ tableId: t.id }); setTableMenuId(null); }}
-                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                    onClick={() => { deleteTable.mutate({ tableId: t.id }); setTableMenuId(null); setTableMenuPos(null); }}
+                    style={{ padding: 8, borderRadius: 3, width: "100%", cursor: "pointer", display: "flex", alignItems: "center", boxSizing: "border-box", border: "none", background: "none", color: "rgb(220, 4, 59)", fontSize: 13, lineHeight: "18px", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(220,4,59,0.06)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
-                      <path d="M2 4h12" />
-                      <path d="M5 4V2h6v2" />
-                      <path d="M6 7v5M10 7v5" />
-                      <path d="M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9" />
-                    </svg>
-                    Delete table
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", whiteSpace: "nowrap", userSelect: "none" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
+                          <path d="M2 4h12" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M5 4V2h6v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M6 7v5M10 7v5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        </svg>
+                        Delete table
+                      </span>
+                    </span>
                   </button>
                 </div>
               )}
@@ -737,11 +845,11 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Seed data</div>
                   <button
                     onClick={() => {
-                      if (!selectedId) return;
+                      if (!selectedId || !bulkAddRef.current) return;
                       setShowAddImportMenu(false);
-                      addBulkRows.mutate({ tableId: selectedId, count: 100_000, sequential: true });
+                      void bulkAddRef.current();
                     }}
-                    disabled={addBulkRows.isPending || !selectedId}
+                    disabled={!selectedId || !bulkAddRef.current}
                     className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50 disabled:opacity-50"
                   >
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
@@ -750,7 +858,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                       <path d="M2 7v3c0 1.1 2.7 2 6 2s6-.9 6-2V7" />
                       <path d="M2 10v3c0 1.1 2.7 2 6 2s6-.9 6-2v-3" />
                     </svg>
-                    {addBulkRows.isPending ? "Seeding rows\u2026" : "Seed 100k rows (1\u2013100,000)"}
+                    Seed 100k rows (1–100,000)
                   </button>
 
                   <div className="my-1.5 border-t border-gray-100" />
@@ -1449,6 +1557,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 hiddenFieldIds={hiddenFieldIds}
                 sortConfig={sortConfig}
                 onAddingRowChange={setIsAddingRow}
+                bulkAddRef={bulkAddRef}
               />
             </div>
           </>
