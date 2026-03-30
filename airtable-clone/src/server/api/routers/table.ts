@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { faker } from "@faker-js/faker";
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "../../../../generated/prisma";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
@@ -9,18 +8,6 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 // ============================================================================
 
 const FieldTypeEnum = z.enum(["TEXT", "NUMBER", "CHECKBOX"]);
-
-function generateFakeValue(fieldType: string): string {
-  switch (fieldType) {
-    case "NUMBER":
-      return String(faker.number.int({ min: 0, max: 100_000 }));
-    case "CHECKBOX":
-      return faker.datatype.boolean() ? "true" : "false";
-    case "TEXT":
-    default:
-      return faker.person.fullName();
-  }
-}
 
 type FilterInput = { columnId: string; operator: string; value: string };
 type ColumnInfo = { id: string; fieldType: string };
@@ -171,8 +158,7 @@ const FilterGroupInput = z.object({
 
 const GetRowsInput = z.object({
   tableId: z.string(),
-  limit: z.number().min(1).max(500).default(100),
-  cursor: z.string().nullish(),
+  limit: z.number().min(1).max(100000).default(10000),
   filterGroup: FilterGroupInput.optional(),
   search: z.string().optional().default(""),
 });
@@ -211,17 +197,6 @@ const RenameColumnInput = z.object({
   columnName: z.string().min(1),
 });
 
-const AddBulkRowsInput = z.object({
-  tableId: z.string(),
-  count: z.number().min(1).max(200_000).default(100_000),
-  sequential: z.boolean().optional(),
-});
-
-const AddBulkRowsBatchInput = z.object({
-  tableId: z.string(),
-  batchSize: z.number().min(1).max(5000),
-  startOrder: z.number().min(0),
-});
 
 const ReorderRowsInput = z.object({
   tableId: z.string(),
@@ -301,19 +276,11 @@ export const tableRouter = createTRPCRouter({
 
       const rows = await ctx.db.row.findMany({
         where: whereClause,
-        take: limit + 1,
         orderBy: { displayOrder: "asc" },
         include: { cells: true },
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       });
 
-      let nextCursor: string | undefined;
-      if (rows.length > limit) {
-        const nextItem = rows.pop();
-        nextCursor = nextItem?.id;
-      }
-
-      return { rows, nextCursor };
+      return { rows };
     }),
 
   create: publicProcedure
@@ -336,45 +303,20 @@ export const tableRouter = createTRPCRouter({
         _max: { displayOrder: true },
       });
 
-      const defaultColumns = [
-        { columnName: "Name", fieldType: "TEXT" as const, displayOrder: 0 },
-        { columnName: "Age", fieldType: "NUMBER" as const, displayOrder: 1 },
-        { columnName: "Date", fieldType: "DATE" as const, displayOrder: 2 },
-      ];
-
-      return ctx.db.$transaction(async (tx) => {
-        const table = await tx.table.create({
-          data: {
-            baseId: input.baseId,
-            tableName: input.tableName,
-            displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
-            columns: { create: defaultColumns },
+      return ctx.db.table.create({
+        data: {
+          baseId: input.baseId,
+          tableName: input.tableName,
+          displayOrder: (maxOrder._max.displayOrder ?? -1) + 1,
+          columns: {
+            create: [
+              { columnName: "Name", fieldType: "TEXT", displayOrder: 0 },
+              { columnName: "Notes", fieldType: "TEXT", displayOrder: 1 },
+              { columnName: "Status", fieldType: "TEXT", displayOrder: 2 },
+            ],
           },
-          include: { columns: { orderBy: { displayOrder: "asc" } } },
-        });
-
-        const rowsData = Array.from({ length: 3 }, (_, i) => ({
-          tableId: table.id,
-          displayOrder: i,
-        }));
-        await tx.row.createMany({ data: rowsData });
-
-        const createdRows = await tx.row.findMany({
-          where: { tableId: table.id },
-          orderBy: { displayOrder: "asc" },
-          select: { id: true },
-        });
-
-        const cellData = createdRows.flatMap((row) =>
-          table.columns.map((col) => ({
-            rowId: row.id,
-            columnId: col.id,
-            cellValue: generateFakeValue(col.fieldType),
-          })),
-        );
-        await tx.cell.createMany({ data: cellData });
-
-        return table;
+        },
+        include: { columns: { orderBy: { displayOrder: "asc" } } },
       });
     }),
 
@@ -524,105 +466,6 @@ export const tableRouter = createTRPCRouter({
       });
     }),
 
-  addBulkRows: publicProcedure
-    .input(AddBulkRowsInput)
-    .mutation(async ({ ctx, input }) => {
-      const { tableId, count, sequential } = input;
-
-      // Verify table exists
-      const table = await ctx.db.table.findUnique({
-        where: { id: tableId },
-      });
-
-      if (!table) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: `Table with ID "${tableId}" not found`,
-        });
-      }
-
-      const columns = await ctx.db.column.findMany({
-        where: { tableId },
-        orderBy: { displayOrder: "asc" },
-      });
-
-      const maxOrder = await ctx.db.row.aggregate({
-        where: { tableId },
-        _max: { displayOrder: true },
-      });
-      let currentOrder = (maxOrder._max.displayOrder ?? -1) + 1;
-
-      // Large batches = fewer round-trips. 5000 rows × columns per batch.
-      const BATCH_SIZE = 5000;
-
-      for (let i = 0; i < count; i += BATCH_SIZE) {
-        const batchCount = Math.min(BATCH_SIZE, count - i);
-
-        const rowData = Array.from({ length: batchCount }, (_, j) => ({
-          tableId,
-          displayOrder: currentOrder + j,
-        }));
-
-        // createManyAndReturn avoids a second findMany to get the IDs back
-        const createdRows = await ctx.db.row.createManyAndReturn({
-          data: rowData,
-          select: { id: true },
-        });
-
-        const cellData = createdRows.flatMap((row, rowIdx) =>
-          columns.map((col) => ({
-            rowId: row.id,
-            columnId: col.id,
-            cellValue: sequential
-              ? String(i + rowIdx + 1)
-              : generateFakeValue(col.fieldType),
-          })),
-        );
-
-        if (cellData.length > 0) {
-          await ctx.db.cell.createMany({ data: cellData });
-        }
-
-        currentOrder += batchCount;
-      }
-
-      return { inserted: count };
-    }),
-
-  addBulkRowsBatch: publicProcedure
-    .input(AddBulkRowsBatchInput)
-    .mutation(async ({ ctx, input }) => {
-      const { tableId, batchSize, startOrder } = input;
-
-      const columns = await ctx.db.column.findMany({
-        where: { tableId },
-        orderBy: { displayOrder: "asc" },
-      });
-
-      const rowData = Array.from({ length: batchSize }, (_, j) => ({
-        tableId,
-        displayOrder: startOrder + j,
-      }));
-
-      const createdRows = await ctx.db.row.createManyAndReturn({
-        data: rowData,
-        select: { id: true },
-      });
-
-      const cellData = createdRows.flatMap((row) =>
-        columns.map((col) => ({
-          rowId: row.id,
-          columnId: col.id,
-          cellValue: generateFakeValue(col.fieldType),
-        })),
-      );
-
-      if (cellData.length > 0) {
-        await ctx.db.cell.createMany({ data: cellData });
-      }
-
-      return { inserted: batchSize };
-    }),
 
   deleteTable: publicProcedure
     .input(DeleteTableInput)

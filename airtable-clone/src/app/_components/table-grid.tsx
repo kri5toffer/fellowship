@@ -251,10 +251,9 @@ interface TableGridProps {
   hiddenFieldIds?: string[];
   sortConfig?: { columnId: string; direction: "asc" | "desc" } | null;
   onAddingRowChange?: (isPending: boolean) => void;
-  bulkAddRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
-export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery = "", hiddenFieldIds = [], sortConfig = null, onAddingRowChange, bulkAddRef }: TableGridProps) {
+export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery = "", hiddenFieldIds = [], sortConfig = null, onAddingRowChange }: TableGridProps) {
   const utils = api.useUtils();
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
@@ -268,21 +267,16 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
   );
   const totalRowCount = table?._count?.rows ?? 0;
 
-  const PAGE_SIZE = 500;
   const {
     data: rowsData,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
     isLoading: isLoadingRows,
-  } = api.table.getRows.useInfiniteQuery(
+  } = api.table.getRows.useQuery(
     {
       tableId,
-      limit: PAGE_SIZE,
+      limit: 10000,
       filterGroup: filterGroup ?? createEmptyFilterGroup(),
       search: debouncedSearch,
     },
-    { getNextPageParam: (lastPage) => lastPage.nextCursor },
   );
 
   const invalidateAll = useCallback(() => {
@@ -294,7 +288,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
 
   const rowsQueryInput = useMemo(() => ({
     tableId,
-    limit: PAGE_SIZE,
+    limit: 10000,
     filterGroup: filterGroup ?? createEmptyFilterGroup(),
     search: debouncedSearch,
   }), [tableId, filterGroup, debouncedSearch]);
@@ -350,122 +344,6 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
     },
   });
 
-  const addBulkRowsBatch = api.table.addBulkRowsBatch.useMutation();
-  const [bulkProgress, setBulkProgress] = useState(0);
-  const [isBulkAdding, setIsBulkAdding] = useState(false);
-  const [bulkStartTime, setBulkStartTime] = useState<number | null>(null);
-  const [bulkElapsed, setBulkElapsed] = useState<number>(0);
-  const [bulkFinishTime, setBulkFinishTime] = useState<number | null>(null);
-  const bulkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Live elapsed time ticker
-  useEffect(() => {
-    if (bulkStartTime && isBulkAdding) {
-      bulkTimerRef.current = setInterval(() => {
-        setBulkElapsed(Date.now() - bulkStartTime);
-      }, 100);
-    }
-    return () => {
-      if (bulkTimerRef.current) clearInterval(bulkTimerRef.current);
-    };
-  }, [bulkStartTime, isBulkAdding]);
-  // Only store a 2000-row pool; track the full 100k count separately
-  const BULK_POOL_SIZE = 2000;
-  const [bulkRowPool, setBulkRowPool] = useState<FlatRow[]>([]);
-  const [bulkVirtualCount, setBulkVirtualCount] = useState(0);
-
-  const addBulkRows = useCallback(async () => {
-    if (isBulkAdding || !table) return;
-    const TOTAL = 100_000;
-    const BATCH_SIZE = 5000;
-    const CONCURRENCY = 6;
-    const cols = table.columns;
-
-    const startTime = Date.now();
-    setIsBulkAdding(true);
-    setBulkProgress(0);
-    setBulkFinishTime(null);
-    setBulkStartTime(startTime);
-    setBulkElapsed(0);
-
-    // --- Step 1: Generate a small pool and set virtual count to 100k ---
-    const firstNames = ["Alex", "Jordan", "Sam", "Riley", "Morgan", "Quinn", "Avery", "Blake", "Casey", "Drew", "Taylor", "Reese", "Jamie", "Dakota", "Hayden", "Emery", "Rowan", "Sage", "Finley", "Skyler"];
-    const lastNames = ["Kim", "Lee", "Chen", "Park", "Xu", "Wu", "Li", "Cho", "Tan", "Ng", "Zhang", "Liu", "Wang", "Yang", "Huang", "Lin", "Sun", "Ma", "Zhao", "Zhou"];
-
-    const makeFake = (ft: string) => {
-      if (ft === "NUMBER") return String(Math.floor(Math.random() * 100000));
-      if (ft === "CHECKBOX") return Math.random() > 0.5 ? "true" : "false";
-      return `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
-    };
-
-    const pool: FlatRow[] = Array.from<FlatRow>({ length: BULK_POOL_SIZE });
-    for (let i = 0; i < BULK_POOL_SIZE; i++) {
-      const row: FlatRow = { _rowId: `local-${i}` };
-      for (const col of cols) {
-        row[col.id] = makeFake(col.fieldType);
-      }
-      pool[i] = row;
-    }
-    setBulkRowPool(pool);
-    setBulkVirtualCount(TOTAL);
-
-    // --- Step 2: Background sync to DB in batches ---
-    const startOrder = totalRowCount ?? 0;
-    const batches: { batchSize: number; startOrder: number }[] = [];
-    for (let i = 0; i < TOTAL; i += BATCH_SIZE) {
-      batches.push({
-        batchSize: Math.min(BATCH_SIZE, TOTAL - i),
-        startOrder: startOrder + i,
-      });
-    }
-
-    let completed = 0;
-    const runBatch = async (batch: (typeof batches)[0]) => {
-      await addBulkRowsBatch.mutateAsync({
-        tableId,
-        batchSize: batch.batchSize,
-        startOrder: batch.startOrder,
-      });
-      completed += batch.batchSize;
-      setBulkProgress(Math.round((completed / TOTAL) * 100));
-    };
-
-    const queue = [...batches];
-    const workers = Array.from({ length: CONCURRENCY }, async () => {
-      while (queue.length > 0) {
-        const batch = queue.shift()!;
-        await runBatch(batch);
-      }
-    });
-
-    try {
-      await Promise.all(workers);
-    } catch (err) {
-      console.error("Bulk insert error:", err);
-    }
-
-    // --- Step 3: Swap local rows for real DB data ---
-    if (bulkTimerRef.current) clearInterval(bulkTimerRef.current);
-    setBulkElapsed(Date.now() - startTime);
-    setBulkFinishTime(Date.now());
-    setBulkProgress(100);
-
-    // Wait for DB count to update before clearing bulk virtual rows
-    // so the virtualizer count doesn't briefly drop to just the old DB count
-    await utils.table.getById.invalidate({ id: tableId });
-    await utils.table.getRows.invalidate({ tableId });
-
-    setBulkRowPool([]);
-    setBulkVirtualCount(0);
-    setIsBulkAdding(false);
-    setBulkStartTime(null);
-  }, [isBulkAdding, table, tableId, totalRowCount, addBulkRowsBatch, invalidateAll, utils]);
-
-  // Expose addBulkRows to parent via ref
-  useEffect(() => {
-    if (bulkAddRef) bulkAddRef.current = addBulkRows;
-    return () => { if (bulkAddRef) bulkAddRef.current = null; };
-  }, [bulkAddRef, addBulkRows]);
 
   const addRow = api.table.createRow.useMutation({
     onMutate: async () => {
@@ -807,7 +685,7 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
   );
 
   const allRows = useMemo(
-    () => rowsData?.pages.flatMap((page) => page.rows) ?? [],
+    () => rowsData?.rows ?? [],
     [rowsData],
   );
 
@@ -1088,33 +966,16 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
 
   const { rows: tableRows } = reactTable.getRowModel();
 
-  // Virtualizer count: real DB total + any bulk virtual rows being inserted
-  const virtualRowCount = totalRowCount + bulkVirtualCount;
-  // How many rows we actually have loaded data for
   const loadedRowCount = tableRows.length;
 
   const rowVirtualizer = useVirtualizer({
-    count: virtualRowCount,
+    count: totalRowCount,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 20,
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
-
-  // Auto-fetch next page when scrolling near the end of loaded data
-  useEffect(() => {
-    const lastItem = virtualRows.at(-1);
-    if (!lastItem) return;
-
-    if (
-      lastItem.index >= loadedRowCount - 30 &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
-      void fetchNextPage();
-    }
-  }, [virtualRows, loadedRowCount, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (isLoadingMeta || isLoadingRows) {
     return (
@@ -1235,10 +1096,6 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
                         onMouseDown={(e) => startResize(colId, e)}
                         className="absolute right-0 top-0 z-[4] h-full w-[5px] cursor-col-resize hover:bg-airtable-blue/40"
                       />
-                      {/* Freeze line — thick blue right-border on the frozen column */}
-                      {isFrozen && (
-                        <div className="pointer-events-none absolute right-0 top-0 h-full w-[2px] bg-[#c5c5c5]" />
-                      )}
                     </th>
                   );
                 })}
@@ -1310,47 +1167,11 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
             )}
             {(() => {
               let dataRowNum = 0;
-              const poolLen = bulkRowPool.length;
               return virtualRows.map((virtualRow) => {
                 const idx = virtualRow.index;
 
-                // --- CASE 1: Beyond loaded DB data → bulk pool or skeleton ---
+                // Beyond loaded DB data → skeleton placeholder
                 if (idx >= loadedRowCount) {
-                  const bulkOffset = idx - loadedRowCount;
-
-                  // If bulk pool exists, cycle through it
-                  if (poolLen > 0) {
-                    const poolRow = bulkRowPool[bulkOffset % poolLen]!;
-                    return (
-                      <tr
-                        key={`bulk-${idx}`}
-                        data-index={idx}
-                        ref={rowVirtualizer.measureElement}
-                        style={{ height: `${ROW_HEIGHT}px` }}
-                      >
-                        <td
-                          className="sticky left-0 z-[1] border-b border-r border-airtable-border bg-white p-0 text-center text-[11px] text-airtable-text-secondary"
-                          style={{ width: ROW_NUM_WIDTH, minWidth: ROW_NUM_WIDTH }}
-                        >
-                          {idx + 1}
-                        </td>
-                        {dbColumns.map((col) => (
-                          <td
-                            key={col.id}
-                            className="border-b border-r border-airtable-border p-0"
-                            style={{ width: getColWidth(col.id), minWidth: MIN_COL_WIDTH, height: ROW_HEIGHT }}
-                          >
-                            <div className="flex h-full items-center text-[13px] leading-[19.5px] text-airtable-text-primary" style={{ padding: "0 6px" }}>
-                              <span className="truncate">{String(poolRow[col.id] ?? "")}</span>
-                            </div>
-                          </td>
-                        ))}
-                        <td className="border-b border-airtable-border" />
-                      </tr>
-                    );
-                  }
-
-                  // Otherwise skeleton placeholder
                   return (
                     <tr
                       key={`skeleton-${idx}`}
@@ -1613,38 +1434,9 @@ export function TableGrid({ tableId, groupByColumnId, filterGroup, searchQuery =
               <line x1="3" y1="8" x2="13" y2="8" />
             </svg>
           </button>
-          <button
-            onClick={() => { setBulkFinishTime(null); void addBulkRows(); }}
-            disabled={isBulkAdding}
-            className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-0.5 text-[11px] text-airtable-text-secondary shadow-sm hover:bg-[#f2f4f8] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isBulkAdding ? (
-              <>
-                <svg className="size-3 animate-spin" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
-                </svg>
-                {bulkProgress}% — {(bulkElapsed / 1000).toFixed(1)}s
-              </>
-            ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400">
-                  <path d="M2 4h12M2 8h12M2 12h8" />
-                </svg>
-                Add 100k rows
-              </>
-            )}
-          </button>
-          {bulkFinishTime && !isBulkAdding && (
-            <span className="flex items-center gap-1 text-[11px] text-green-600">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-500">
-                <path d="M3 8.5l3 3 7-7" />
-              </svg>
-              100k rows in {(bulkElapsed / 1000).toFixed(1)}s
-            </span>
-          )}
         </div>
         <div className="ml-2 text-[11px] text-airtable-text-secondary">
-          {totalRowCount + bulkVirtualCount} record{(totalRowCount + bulkVirtualCount) !== 1 ? "s" : ""}{bulkVirtualCount > 0 && ` (syncing ${bulkProgress}%)`}
+          {totalRowCount} record{totalRowCount !== 1 ? "s" : ""}
         </div>
       </div>
 

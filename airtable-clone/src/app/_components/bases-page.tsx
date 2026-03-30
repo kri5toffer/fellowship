@@ -435,7 +435,7 @@ export function BasesPage() {
           {/* 4 Action cards */}
           <div className="mb-[24px] flex flex-col">
             <div>
-              <div className="mt-[4px]" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "16px" }}>
+              <div className="mt-[4px]" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 {ACTION_CARDS.map((card) => (
                   <div key={card.title}>
                     <button

@@ -22,7 +22,6 @@ import { TableGrid } from "./table-grid";
 import { FilterBar, type FilterGroup, createEmptyFilterGroup, migrateFilters } from "./filter-bar";
 import { HideFieldsPanel } from "./hide-fields-panel";
 import { ViewsSidebar } from "./views-sidebar";
-import { Button } from "~/components/ui/button";
 
 const FIELD_TYPE_ICONS: Record<string, React.ReactNode> = {
   TEXT: <Type className="size-3.5 text-gray-500" />,
@@ -54,7 +53,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [renameTableValue, setRenameTableValue] = useState("");
   const [recordTypeName, setRecordTypeName] = useState("Record");
   const [isAddingRow, setIsAddingRow] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(false);
   const [showAddImportMenu, setShowAddImportMenu] = useState(false);
   const [addImportMenuPos, setAddImportMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
@@ -62,6 +61,10 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const [tableSwitcherSearch, setTableSwitcherSearch] = useState("");
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [toolsMenuPos, setToolsMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [showGridViewMenu, setShowGridViewMenu] = useState(false);
+  const [gridViewMenuPos, setGridViewMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const gridViewBtnRef = useRef<HTMLButtonElement>(null);
+  const gridViewMenuRef = useRef<HTMLDivElement>(null);
   const tableMenuRef = useRef<HTMLDivElement>(null);
   const addImportMenuRef = useRef<HTMLDivElement>(null);
   const addImportBtnRef = useRef<HTMLButtonElement>(null);
@@ -69,8 +72,6 @@ export function TableTabs({ baseId }: { baseId: string }) {
   const tableSwitcherBtnRef = useRef<HTMLButtonElement>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
   const toolsBtnRef = useRef<HTMLButtonElement>(null);
-  const bulkAddRef = useRef<(() => Promise<void>) | null>(null);
-
   const tableList = tables ?? [];
   const selectedId = activeTableId ?? tableList[0]?.id ?? null;
 
@@ -111,6 +112,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
       setShowAddImportMenu(false);
       setShowTableSwitcher(false);
       setShowToolsMenu(false);
+      setShowGridViewMenu(false);
       setTableMenuId(null); setTableMenuPos(null);
       if (showSearch) {
         setShowSearch(false);
@@ -177,6 +179,20 @@ export function TableTabs({ baseId }: { baseId: string }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showToolsMenu]);
+
+  useEffect(() => {
+    if (!showGridViewMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        gridViewMenuRef.current && !gridViewMenuRef.current.contains(e.target as Node) &&
+        gridViewBtnRef.current && !gridViewBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowGridViewMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showGridViewMenu]);
 
   const handleSelectView = (view: {
     id: string | null;
@@ -294,7 +310,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
       {/* Table tabs bar */}
       <nav
         aria-label="Tables"
-        className="scrollbar-hidden flex flex-none items-end overflow-auto"
+        className="scrollbar-hidden flex flex-none items-center overflow-auto"
         style={{
           height: 40,
           backgroundColor: "#fff1ff",
@@ -309,7 +325,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
             const showSeparator = idx > 0 && !isActive && !prevIsActive;
 
             return (
-              <div key={t.id} className="flex items-end" style={{ height: 40 }}>
+              <div key={t.id} className="flex items-center" style={{ height: 40 }}>
               {showSeparator && (
                 <span
                   style={{
@@ -328,14 +344,12 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   isActive
                     ? {
                         backgroundColor: "white",
-                        borderRadius: "6px 6px 0 0",
-                        height: 32,
+                        borderRadius: 6,
+                        height: 40,
                         boxShadow: "0 1px 4px rgba(0,0,0,0.14)",
-                        alignSelf: "flex-end",
                       }
                     : {
-                        height: 32,
-                        alignSelf: "flex-end",
+                        height: 40,
                       }
                 }
               >
@@ -368,7 +382,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 </button>
                 {/* Chevron — absolutely positioned like Airtable */}
                 <div
-                  className={`absolute bottom-0 top-0 flex items-center ${isActive ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"}`}
+                  className={`absolute bottom-0 top-0 flex items-center ${isActive ? "opacity-100" : "opacity-0 pointer-events-none"}`}
                   style={{ right: 0, userSelect: "none" }}
                 >
                   <button
@@ -780,7 +794,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                     setShowAddImportMenu(true);
                   }
                 }}
-                className="mb-px ml-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
+                className="ml-1 flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
                 style={{ color: "rgb(97, 102, 112)" }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = "rgba(140,63,120,0.1)";
@@ -842,26 +856,6 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   <div className="my-1.5 border-t border-gray-100" />
 
                   {/* Section: Seed data */}
-                  <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Seed data</div>
-                  <button
-                    onClick={() => {
-                      if (!selectedId || !bulkAddRef.current) return;
-                      setShowAddImportMenu(false);
-                      void bulkAddRef.current();
-                    }}
-                    disabled={!selectedId || !bulkAddRef.current}
-                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-airtable-text-primary hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-gray-500">
-                      <path d="M2 4c0-1.1 2.7-2 6-2s6 .9 6 2" />
-                      <path d="M2 4v3c0 1.1 2.7 2 6 2s6-.9 6-2V4" />
-                      <path d="M2 7v3c0 1.1 2.7 2 6 2s6-.9 6-2V7" />
-                      <path d="M2 10v3c0 1.1 2.7 2 6 2s6-.9 6-2v-3" />
-                    </svg>
-                    Seed 100k rows (1–100,000)
-                  </button>
-
-                  <div className="my-1.5 border-t border-gray-100" />
 
                   {/* Section: Add from other sources */}
                   <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">Add from other sources</div>
@@ -964,7 +958,7 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 setShowToolsMenu(true);
               }
             }}
-            className="mb-px flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-normal transition-colors"
             style={{ color: "rgb(97, 102, 112)" }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = "rgba(140,63,120,0.1)";
@@ -1096,9 +1090,21 @@ export function TableTabs({ baseId }: { baseId: string }) {
               <Menu className="size-4" />
             </button>
             <h2 className="flex items-center">
-              <div
-                className="flex cursor-pointer items-center rounded px-1 hover:bg-[rgba(0,0,0,0.05)]"
+              <button
+                ref={gridViewBtnRef}
+                type="button"
+                onClick={() => {
+                  if (showGridViewMenu) {
+                    setShowGridViewMenu(false);
+                  } else {
+                    const rect = gridViewBtnRef.current?.getBoundingClientRect();
+                    if (rect) setGridViewMenuPos({ top: rect.bottom + 4, left: rect.left });
+                    setShowGridViewMenu(true);
+                  }
+                }}
+                className="flex items-center rounded px-1 hover:bg-[rgba(0,0,0,0.05)]"
                 style={{ height: 26, maxWidth: "fit-content" }}
+                aria-label="Open view options menu"
               >
                 <div className="flex min-w-0 items-center">
                   <span className="inline-flex flex-none items-center">
@@ -1112,8 +1118,191 @@ export function TableTabs({ baseId }: { baseId: string }) {
                   </span>
                   <ChevronDown className="mt-px size-4 flex-none text-[rgb(29,31,37)]" />
                 </div>
-              </div>
+              </button>
             </h2>
+
+            {/* Grid view options menu */}
+            {showGridViewMenu && gridViewMenuPos && (
+              <div
+                ref={gridViewMenuRef}
+                className="fixed z-50 overflow-hidden rounded-md bg-white"
+                style={{
+                  top: gridViewMenuPos.top,
+                  left: gridViewMenuPos.left,
+                  width: 352,
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  boxShadow: "0 0 0 1px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.18)",
+                  fontFamily: "-apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                }}
+              >
+                {/* Header: Collaborative view */}
+                <div
+                  className="flex cursor-pointer items-center justify-between px-3"
+                  style={{ height: 44, backgroundColor: "rgb(247,247,247)", borderBottom: "1px solid rgba(0,0,0,0.08)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgb(240,240,240)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "rgb(247,247,247)"; }}
+                >
+                  <div className="flex items-center" style={{ gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <circle cx="5.5" cy="5" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+                      <circle cx="10.5" cy="5" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M1 13c0-2.2 1.8-3.5 4.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <path d="M8 13c0-2.2 1.8-3.5 4.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                    </svg>
+                    <span style={{ fontSize: 13, fontWeight: 500, lineHeight: "18px", color: "rgb(29,31,37)" }}>Collaborative view</span>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: "rgb(97,102,112)", flexShrink: 0 }}>
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div className="px-3 py-2" style={{ borderBottom: "1px solid rgba(0,0,0,0.08)", backgroundColor: "rgb(247,247,247)" }}>
+                  <p style={{ fontSize: 12, lineHeight: "16px", color: "rgb(97,102,112)", margin: 0 }}>
+                    Editors and up can edit the view configuration
+                  </p>
+                </div>
+
+                {/* All items in one padded container — matches Airtable ul.p1-and-half padding:12 */}
+                <div style={{ padding: 12 }}>
+
+                  {/* Assign as personal view */}
+                  <button
+                    className="flex w-full items-center justify-between rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <span className="flex items-center" style={{ gap: 8 }}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                        <path d="M2 8h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        <path d="M8 5l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Assign as personal view
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "rgb(22,110,225)", backgroundColor: "rgb(219,234,254)", borderRadius: 20, padding: "2px 8px", lineHeight: "16px", flexShrink: 0 }}>Team</span>
+                  </button>
+
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.1)", margin: "8px 0" }} />
+
+                  {/* Rename view */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                    </svg>
+                    Rename view
+                  </button>
+
+                  {/* Edit view description */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M8 7.5v3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <circle cx="8" cy="5.5" r="0.8" fill="currentColor" />
+                    </svg>
+                    Edit view description
+                  </button>
+
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.1)", margin: "8px 0" }} />
+
+                  {/* Duplicate view */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <rect x="5" y="5" width="8" height="8" rx="1.2" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M3 11V3h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Duplicate view
+                  </button>
+
+                  {/* Copy another view's configuration */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M6 8.5l1.5 1.5L10.5 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Copy another view&apos;s configuration
+                  </button>
+
+                  {/* Separator */}
+                  <div style={{ height: 1, backgroundColor: "rgba(0,0,0,0.1)", margin: "8px 0" }} />
+
+                  {/* Download CSV */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M8 5v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <path d="M6 8.5l2 2 2-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Download CSV
+                  </button>
+
+                  {/* Print view */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(29,31,37)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: "rgb(97,102,112)" }}>
+                      <rect x="3" y="6" width="10" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+                      <path d="M5 6V3h6v3" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                      <rect x="5.5" y="8.5" width="5" height="1" rx="0.5" fill="currentColor" />
+                    </svg>
+                    Print view
+                  </button>
+
+                  {/* Delete view */}
+                  <button
+                    className="flex w-full items-center rounded"
+                    style={{ padding: "8px 8px", background: "none", border: "none", cursor: "pointer", fontSize: 13, lineHeight: "18px", color: "rgb(220,4,59)", gap: 8, fontFamily: "inherit" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(220,4,59,0.06)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    onClick={() => setShowGridViewMenu(false)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <path d="M2 4h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <path d="M5 4V2.5h6V4" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                      <path d="M6 7v4.5M10 7v4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <path d="M3 4l.8 9a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L13 4" stroke="currentColor" strokeWidth="1.4" />
+                    </svg>
+                    Delete view
+                  </button>
+
+                </div>
+              </div>
+            )}
 
             {/* Loading indicator for row operations */}
             {isAddingRow && (
@@ -1557,7 +1746,6 @@ export function TableTabs({ baseId }: { baseId: string }) {
                 hiddenFieldIds={hiddenFieldIds}
                 sortConfig={sortConfig}
                 onAddingRowChange={setIsAddingRow}
-                bulkAddRef={bulkAddRef}
               />
             </div>
           </>

@@ -8,9 +8,9 @@ import { TRPCReactProvider } from "~/trpc/react";
 import { cn } from "~/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Lyra",
+  title: "Airtable Clone",
   description: "Airtable Clone",
-  icons: [{ rel: "icon", url: "/icon.svg", type: "image/svg+xml" }],
+  icons: [{ rel: "icon", url: "https://keycombiner.com/media/application-icons/airtable.png", type: "image/png" }],
 };
 
 const inter = Inter({
@@ -23,7 +23,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={cn(inter.variable)}>
-      <body className="antialiased" style={{ fontFamily: "'GT Eesti Display', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif", fontWeight: 500 }}>
+      <body className="antialiased" suppressHydrationWarning style={{ fontFamily: "'GT Eesti Display', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif", fontWeight: 500 }}>
         <SessionProvider>
           <TRPCReactProvider>{children}</TRPCReactProvider>
         </SessionProvider>
